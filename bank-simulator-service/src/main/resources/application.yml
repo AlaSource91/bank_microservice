@@ -1,0 +1,101 @@
+spring:
+  application:
+    name: bank-simulator-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/bank_simulator_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username:  bank_user
+    password:  bank_password123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    show-sql: true
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    password: ""
+    database: 0
+    jedis:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 5051
+
+# Eureka Configuration - Disabled for standalone development
+eureka:
+  client:
+    enabled: false
+
+#springdoc:
+ # api-docs:
+  #  path: /v3/api-docs
+   # enabled: true
+  #swagger-ui:
+   # path: /swagger-ui.html
+    #enabled: true
+    #operationsSorter: method
+    #tagsSorter: alpha
+    #disable-swagger-default-url: true
+    #use-root-path: false
+  #show-actuator: false
+  #packages-to-scan: com.alaeldin.securehub_auth_service.controller
+  #paths-to-match: /api/**
+  #default-consumes-media-type: application/json
+  #default-produces-media-type: application/json
+  #override-with-generic-response: false
+  #model-and-view-allowed: false
+
+#app:
+ # jwt:
+  #  secret: ${JWT_SECRET_KEY:48404D635166546A576E5A7234753778217A25432A462D4A614E645267556B58}
+   # expiration-ms: 36000000  # 10 hours in milliseconds
+   # header-name: Authorization
+   # token-prefix: "Bearer "
+  #seeder:
+   # enabled: true
+    #admin:
+     # email: ${ADMIN_EMAIL:admin@securehub.com}
+      #name: ${ADMIN_NAME:System Administrator}
+      #password: ${ADMIN_PASSWORD:Admin@123}
+
+
+logging:
+  level:
+    org.flywaydb: DEBUG
+    org.flywaydb.core.internal.database.mysql: DEBUG
+    org.flywaydb.core.internal.command.DbMigrate: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+cache:
+  ttl:
+    account-balance: 300        #5 minutes
+    transaction: 600             #10 minutes
+    account-info: 900            #15 minutes
+  idempotency:
+    ttl: 86400 #24 hours in seconds
+    max-entries: 1000000
+    eviction-policy: LRU
+    Key-pattern: "idempotency:*"
+
+# Distributed Locking Configuration
+lock:
+  timeout-minutes: 5           # Lock expiration timeout in minutes
+  cleanup-interval-ms: 120000   # Cleanup scheduler interval (2 minutes)
+  cleanup-initial-delay-ms: 60000  # Initial delay before first cleanup (1 minute)
