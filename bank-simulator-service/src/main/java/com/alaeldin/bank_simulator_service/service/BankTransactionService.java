@@ -1,5 +1,6 @@
 package com.alaeldin.bank_simulator_service.service;
 
+import com.alaeldin.bank_simulator_service.constant.EventType;
 import com.alaeldin.bank_simulator_service.constant.StatusTransaction;
 import com.alaeldin.bank_simulator_service.constant.AccountStatus;
 import com.alaeldin.bank_simulator_service.dto.TransferRequest;
@@ -50,6 +51,7 @@ public class BankTransactionService {
     private final BankTransactionRepository bankTransactionRepository;
     private final BankAccountRepository bankAccountRepository;
     private final LedgerService ledgerService;
+    private final EventPublishingService eventPublishingService;
 
     /**
      * Constructor for dependency injection.
@@ -64,12 +66,14 @@ public class BankTransactionService {
                                    AccountVersionService accountVersionService,
                                    BankTransactionRepository bankTransactionRepository,
                                    BankAccountRepository bankAccountRepository
-            ,LedgerService ledgerService) {
+            ,LedgerService ledgerService
+            ,EventPublishingService eventPublishingService) {
         this.bankAccountService = bankAccountService;
         this.accountVersionService = accountVersionService;
         this.bankTransactionRepository = bankTransactionRepository;
         this.bankAccountRepository = bankAccountRepository;
         this.ledgerService = ledgerService;
+        this.eventPublishingService = eventPublishingService;
     }
 
     /**
@@ -173,6 +177,8 @@ public class BankTransactionService {
             txn.setUpdatedAt(LocalDateTime.now());
             txn = bankTransactionRepository.save(txn);
             ledgerService.createLedgerEntries(txn);
+            eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_COMPLETED);
+
             log.info("Transfer completed successfully - Reference: {}, Amount: {}",
                     txn.getReferenceId(),
                     txn.getAmount());
@@ -187,7 +193,7 @@ public class BankTransactionService {
             txn.setErrorMessage("Account locked by another transaction: " + e.getMessage());
             txn.setFailedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());
-
+            eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
             return bankTransactionRepository.save(txn);
 
         } catch (OptimisticLockingFailureException | OptimisticLockException e) {
@@ -198,6 +204,7 @@ public class BankTransactionService {
             txn.setErrorMessage("Concurrent modification detected, transaction failed after retries");
             txn.setFailedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());
+            eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
 
             return bankTransactionRepository.save(txn);
 
@@ -209,7 +216,7 @@ public class BankTransactionService {
             txn.setErrorMessage("Validation error: " + e.getMessage());
             txn.setFailedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());
-
+            eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
             return bankTransactionRepository.save(txn);
 
         } catch (Exception e) {
@@ -220,7 +227,7 @@ public class BankTransactionService {
             txn.setErrorMessage("Transfer failed: " + e.getMessage());
             txn.setFailedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());
-
+            eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
             return bankTransactionRepository.save(txn);
         }
     }

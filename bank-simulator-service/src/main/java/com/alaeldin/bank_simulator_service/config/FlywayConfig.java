@@ -19,7 +19,7 @@ import org.springframework.core.annotation.Order;
 @Configuration
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @ConditionalOnClass(Flyway.class)
-public class FlywayConfiguration {
+public class FlywayConfig{
 
     /**
      * Create and execute Flyway bean explicitly
@@ -44,10 +44,3 @@ public class FlywayConfiguration {
         return flyway;
     }
 }
-
-
-
-
-
-
-

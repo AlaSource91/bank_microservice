@@ -1,4 +1,4 @@
-package com.alaeldin.bank_simulator_service.service;
+package com.alaeldin.bank_simulator_service.job;
 
 import com.alaeldin.bank_simulator_service.model.BankAccount;
 import com.alaeldin.bank_simulator_service.repository.BankAccountRepository;
