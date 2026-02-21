@@ -104,7 +104,7 @@ public class AccountVersionService {
     @Retryable(
             retryFor = {OptimisticLockingFailureException.class, OptimisticLockException.class},
             maxAttempts = 3,
-            backoff = @Backoff(delay = 100, multiplier = 2.0)
+            backoff = @Backoff(delay = 200, multiplier = 2.0)
     )
     @CacheEvict(value = {"accountVersions", "accountBalance"}, key = "#accountNumber")
     public void updateBalanceWithVersionCheck(
@@ -112,67 +112,50 @@ public class AccountVersionService {
             BigDecimal amount,
             String transactionId
     ) {
-        String lockId = transactionId != null ? transactionId
+
+        String lockId = transactionId != null
+                ? transactionId
                 : UUID.randomUUID().toString();
 
-        log.info("Starting balance update - Account: {}, Amount: {}, Transaction: {}",
+        log.info("Starting balance update - Account: {}, Amount: {}, Tx: {}",
                 accountNumber, amount, lockId);
 
-        try {
-            // Step 1: Acquire pessimistic lock (SELECT FOR UPDATE)
-            BankAccount account = bankAccountRepository.findByAccountNumberWithLock(accountNumber)
-                    .orElseThrow(() -> {
-                        log.error("Account not found: {}", accountNumber);
-                        return new ResourceNotFoundException("BankAccount", "accountNumber", accountNumber);
-                    });
+        // 1️⃣ Fetch managed entity (no FORCE_INCREMENT)
+        BankAccount account = bankAccountRepository
+                .findByAccountNumber(accountNumber)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("BankAccount", "accountNumber", accountNumber));
 
-            // Step 2: Check if account is already locked
-            if (account.isLocked()) {
-                log.warn("Account {} is already locked by {}", accountNumber
-                        , account.getLockedBy());
-                throw new AccountLockedException(accountNumber, account.getLockedBy());
-            }
-
-            // Step 3: Acquire distributed lock
-            account.acquireLock(lockId);
-            log.debug("Lock acquired on account {} by {}", accountNumber, lockId);
-
-            // Step 4: Record current state
-            Long oldVersion = account.getVersion();
-            BigDecimal oldBalance = account.getBalance();
-            BigDecimal newBalance = oldBalance.add(amount);
-
-            // Step 5: Validate new balance
-            if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                log.error("Insufficient balance - Account: {}, Current: {}, Requested: {}, Result: {}",
-                        accountNumber, oldBalance, amount, newBalance);
-                throw new IllegalArgumentException(
-                        String.format("Insufficient balance. Current: %s, Requested: %s", oldBalance, amount)
-                );
-            }
-
-            // Step 6: Update balance and timestamp
-            account.setBalance(newBalance);
-            account.setUpdatedAt(LocalDateTime.now());
-
-            // Step 7: Save (JPA auto-increments version)
-            BankAccount savedAccount = bankAccountRepository.save(account);
-
-            // Step 8: Release lock
-            savedAccount.releaseLock();
-            bankAccountRepository.save(savedAccount);
-
-            log.info("Balance updated successfully - Account: {}, Old Balance: {}, New Balance: {}, " +
-                            "Old Version: {}, New Version: {}, Transaction: {}",
-                    accountNumber, oldBalance, newBalance, oldVersion, savedAccount.getVersion(), lockId);
-
-        } catch (OptimisticLockingFailureException | OptimisticLockException e) {
-            log.warn("Optimistic lock failure for account {} (attempt will be retried)", accountNumber);
-            throw e; // Let @Retryable handle retry
-        } catch (Exception e) {
-            log.error("Failed to update balance for account {}: {}", accountNumber, e.getMessage(), e);
-            throw e;
+        // Logical lock check
+        if (account.isLocked()) {
+            throw new AccountLockedException(accountNumber, account.getLockedBy());
         }
+
+        // Acquire logical lock
+        account.acquireLock(lockId);
+
+        //  Calculate new balance
+        BigDecimal oldBalance = account.getBalance();
+        BigDecimal newBalance = oldBalance.add(amount);
+
+        if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    String.format("Insufficient balance. Current: %s, Requested: %s",
+                            oldBalance, amount)
+            );
+        }
+
+        // Apply updates
+        account.setBalance(newBalance);
+        account.setUpdatedAt(LocalDateTime.now());
+
+        // Release lock (same managed entity)
+        account.releaseLock();
+
+        log.info("Balance updated successfully - Account: {}, Old: {}, New: {}, Version: {}",
+                accountNumber, oldBalance, newBalance, account.getVersion());
+
+
     }
 
     /**

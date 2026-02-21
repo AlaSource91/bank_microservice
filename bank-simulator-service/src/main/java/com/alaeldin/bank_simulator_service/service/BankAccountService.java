@@ -2,6 +2,7 @@ package com.alaeldin.bank_simulator_service.service;
 
 
 
+import com.alaeldin.bank_simulator_service.constant.AccountEventType;
 import com.alaeldin.bank_simulator_service.util.AccountNumberUtil;
 import com.alaeldin.bank_simulator_service.constant.AccountStatus;
 import com.alaeldin.bank_simulator_service.constant.AccountType;
@@ -48,6 +49,7 @@ public class BankAccountService {
 
     private final BankAccountRepository bankAccountRepository;
     private final BankAccountMapper bankAccountMapper;
+    private final EventPublishBankAccountService eventPublishBankAccountService;
 
     /**
      * Constructor for dependency injection.
@@ -56,14 +58,17 @@ public class BankAccountService {
      * @param bankAccountRepository the repository for database operations
      * @param bankAccountMapper     the mapper for DTO conversions
      */
-    public BankAccountService(BankAccountRepository bankAccountRepository, BankAccountMapper bankAccountMapper) {
+    public BankAccountService(BankAccountRepository bankAccountRepository
+            , BankAccountMapper bankAccountMapper, EventPublishBankAccountService eventPublishBankAccountService) {
         this.bankAccountRepository = bankAccountRepository;
         this.bankAccountMapper = bankAccountMapper;
+        this.eventPublishBankAccountService = eventPublishBankAccountService;
     }
 
     /**
      * Creates a new bank account with the provided information.
-     * Validates that the account holder name is unique and initializes the account with default values.
+     * Validates that the account holder name is unique
+     * and initializes the account with default values.
      *
      * <p>Process:</p>
      * <ol>
@@ -120,6 +125,7 @@ public class BankAccountService {
 
         // Map entity to response DTO
         BankAccountResponse bankAccountResponse = bankAccountMapper.toDto(savedAccount);
+        eventPublishBankAccountService.saveAccountEventToOutbox(savedAccount, AccountEventType.ACCOUNT_CREATED);
 
         log.info("Bank account created successfully - Account Number: {}, Holder: {}, ID: {}",
                 savedAccount.getAccountNumber(),
@@ -516,6 +522,7 @@ public class BankAccountService {
 
         // Save updated account to database
         BankAccount updatedAccount = bankAccountRepository.save(bankAccount);
+        eventPublishBankAccountService.saveAccountEventToOutbox(bankAccount, AccountEventType.ACCOUNT_UPDATED);
         log.debug("Updated account persisted to database with ID: {}", updatedAccount.getId());
 
         // Map entity to response DTO
@@ -655,6 +662,7 @@ public class BankAccountService {
         bankAccount.setAccountStatus(AccountStatus.FROZEN);
         bankAccount.setUpdatedAt(LocalDateTime.now());
         bankAccountRepository.save(bankAccount);
+        eventPublishBankAccountService.saveAccountEventToOutbox(bankAccount, AccountEventType.ACCOUNT_FROZEN);
 
         log.info("Account frozen successfully - Account Number: {}, Holder: {}",
                 accountNumber,
@@ -709,7 +717,7 @@ public class BankAccountService {
         bankAccount.setBalance(newBalance);
         bankAccount.setUpdatedAt(LocalDateTime.now());
         bankAccountRepository.save(bankAccount);
-
+        eventPublishBankAccountService.saveAccountEventToOutbox(bankAccount, AccountEventType.ACCOUNT_UPDATED);
         log.info("Balance updated successfully for account number {} - Old Balance: {}, Amount Added: {}, New Balance: {}",
                 accountNumber,
                 oldBalance,

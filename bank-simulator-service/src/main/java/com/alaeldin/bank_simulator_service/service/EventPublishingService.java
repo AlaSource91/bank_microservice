@@ -55,7 +55,7 @@ public class EventPublishingService {
     private final OutboxService outboxService;
 
     // Configuration
-    @Value("${app.kafka.topic.bank-events:bank.events}")
+    @Value("${app.kafka.topic.transaction-events:bank.transaction.events}")
     private String bankEventsTopic;
 
     @Value("${app.name:bank-simulator-service}")

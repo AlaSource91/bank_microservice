@@ -1,8 +1,11 @@
 package com.alaeldin.bank_simulator_service.constant;
 
+import lombok.Getter;
+
 /**
  * Enum representing the type of a bank account.
  */
+@Getter
 public enum AccountType {
     /**
      * Personal account for individual customers
@@ -13,6 +16,12 @@ public enum AccountType {
      */
     BUSINESS("Business");
 
+    /**
+     * -- GETTER --
+     *  Gets the display name of the account type
+     *
+     * @return the display name
+     */
     private final String displayName;
 
     /**
@@ -24,12 +33,4 @@ public enum AccountType {
         this.displayName = displayName;
     }
 
-    /**
-     * Gets the display name of the account type
-     *
-     * @return the display name
-     */
-    public String getDisplayName() {
-        return displayName;
-    }
 }

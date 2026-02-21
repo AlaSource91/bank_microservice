@@ -73,7 +73,7 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
      * @param accountNumber the account number to find
      * @return Optional containing the account with lock, or empty
      */
-    @Lock(LockModeType.OPTIMISTIC_FORCE_INCREMENT)
+    @Lock(LockModeType.OPTIMISTIC)
     @Query("SELECT ba FROM BankAccount ba WHERE ba.accountNumber = :accountNumber")
     Optional<BankAccount> findByAccountNumberWithLock(@Param("accountNumber") String accountNumber);
 

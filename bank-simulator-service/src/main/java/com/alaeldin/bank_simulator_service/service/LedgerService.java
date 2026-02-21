@@ -92,14 +92,14 @@ public class LedgerService {
             List<TransactionLedger> entries = List.of(debitEntry, creditEntry);
             repository.saveAll(entries);
 
-            log.info("✅ Successfully created {} ledger entries for transaction: {} - Debit: {}, Credit: {}",
+            log.info(" Successfully created {} ledger entries for transaction: {} - Debit: {}, Credit: {}",
                     entries.size(), transactionRef, debitEntry.getLedgerEntryId(), creditEntry.getLedgerEntryId());
 
             // Log cache eviction
-            log.debug("🗑️ Evicted ledger caches after creating entries for transaction: {}", transactionRef);
+            log.debug("Evicted ledger caches after creating entries for transaction: {}", transactionRef);
 
         } catch (Exception e) {
-            log.error("❌ Failed to create ledger entries for transaction: {} - Error: {}",
+            log.error(" Failed to create ledger entries for transaction: {} - Error: {}",
                     transactionRef, e.getMessage(), e);
             throw new RuntimeException("Failed to create ledger entries: " + e.getMessage(), e);
         }
@@ -229,7 +229,8 @@ public class LedgerService {
     public BigDecimal getBalanceAsOf(Long accountId, LocalDateTime dateTime) {
         validateBalanceQueryParameters(accountId, dateTime);
 
-        log.debug("Cache MISS - Loading balance from DB for account: {} as of: {}", accountId, dateTime);
+        log.debug("Cache MISS - Loading balance from DB for account: {} as of: {}"
+                , accountId, dateTime);
 
         BigDecimal balance = repository.getBalanceAsOf(accountId, dateTime)
                 .orElse(BigDecimal.ZERO);
@@ -258,10 +259,12 @@ public class LedgerService {
         log.debug("Cache MISS - Loading ledger entries for account: {} - Page: {}, Size: {}",
                 accountId, pageable.getPageNumber(), pageable.getPageSize());
 
-        Page<TransactionLedger> entries = repository.findByAccountIdOrderByEntryDateDesc(accountId, pageable);
+        Page<TransactionLedger> entries = repository
+                .findByAccountIdOrderByEntryDateDesc(accountId, pageable);
 
         // Convert to cacheable DTO
-        List<LedgerEntriesPage.LedgerEntryDto> entryDtos = entries.getContent().stream()
+        List<LedgerEntriesPage.LedgerEntryDto> entryDtos = entries.getContent()
+                .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
 

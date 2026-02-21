@@ -200,14 +200,14 @@ public class OutboxPublisher {
         try {
             outboxService.markEventAsFailed(event.getId(), errorMessage);
 
-            log.error(" ❌ KAFKA SEND FAILED - Event Publishing Error Details:");
-            log.error("    📋 Event ID: {}", event.getId());
-            log.error("    🏦 Aggregate ID: {}", event.getAggregateId());
-            log.error("    📝 Event Type: {}", event.getEventType());
-            log.error("    📡 Topic: {}", bankEventsTopic);
-            log.error("    ⚠️  Error Message: {}", errorMessage);
-            log.error("    🔍 Root Cause: {}", rootCause);
-            log.error("    📅 Created At: {}", event.getCreatedAt());
+            log.error("  KAFKA SEND FAILED - Event Publishing Error Details:");
+            log.error("    Event ID: {}", event.getId());
+            log.error("     Aggregate ID: {}", event.getAggregateId());
+            log.error("     Event Type: {}", event.getEventType());
+            log.error("     Topic: {}", bankEventsTopic);
+            log.error("     Error Message: {}", errorMessage);
+            log.error("     Root Cause: {}", rootCause);
+            log.error("     Created At: {}", event.getCreatedAt());
 
             // Log additional troubleshooting info
             if (exception != null) {
@@ -215,15 +215,15 @@ public class OutboxPublisher {
 
                 // Check for specific Kafka-related errors
                 if (isKafkaConnectivityIssue(exception)) {
-                    log.error("    🚨 DIAGNOSIS: Kafka connectivity issue detected!");
-                    log.error("    💡 SOLUTION: Check if Kafka is running on localhost:9092");
-                    log.error("    🛠️  Run: docker-compose ps to verify Kafka status");
+                    log.error("     DIAGNOSIS: Kafka connectivity issue detected!");
+                    log.error("     SOLUTION: Check if Kafka is running on localhost:9092");
+                    log.error("      Run: docker-compose ps to verify Kafka status");
                 } else if (isKafkaTimeoutIssue(exception)) {
-                    log.error("    🚨 DIAGNOSIS: Kafka timeout issue detected!");
-                    log.error("    💡 SOLUTION: Consider increasing timeout values");
+                    log.error("     DIAGNOSIS: Kafka timeout issue detected!");
+                    log.error("     SOLUTION: Consider increasing timeout values");
                 } else if (isSerializationIssue(exception)) {
-                    log.error("    🚨 DIAGNOSIS: Event serialization issue detected!");
-                    log.error("    💡 SOLUTION: Check event payload format");
+                    log.error("     DIAGNOSIS: Event serialization issue detected!");
+                    log.error("     SOLUTION: Check event payload format");
                 }
             }
 

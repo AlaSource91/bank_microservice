@@ -1,8 +1,11 @@
 package com.alaeldin.bank_simulator_service.constant;
 
+import lombok.Getter;
+
 /**
  * Enum representing the status of a bank account.
  */
+@Getter
 public enum AccountStatus {
     /**
      * Account is active and can be used for transactions
@@ -17,6 +20,12 @@ public enum AccountStatus {
      */
     CLOSED("Closed");
 
+    /**
+     * -- GETTER --
+     *  Gets the display name of the account status
+     *
+     * @return the display name
+     */
     private final String displayName;
 
     /**
@@ -28,12 +37,4 @@ public enum AccountStatus {
         this.displayName = displayName;
     }
 
-    /**
-     * Gets the display name of the account status
-     *
-     * @return the display name
-     */
-    public String getDisplayName() {
-        return displayName;
-    }
 }
