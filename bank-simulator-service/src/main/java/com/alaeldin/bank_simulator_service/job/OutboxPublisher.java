@@ -47,8 +47,11 @@ public class OutboxPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.kafka.topic.bank-events:bank.events}")
-    private String bankEventsTopic;
+    @Value("${app.kafka.topic.transaction-events:bank.transaction.events}")
+    private String transactionEventsTopic;
+
+    @Value("${app.kafka.topic.account-events:bank.account.events}")
+    private String accountEventsTopic;
 
     @Value("${app.outbox.batch-size:20}")
     private int batchSize;
@@ -104,12 +107,15 @@ public class OutboxPublisher {
             // Create Kafka message key using aggregate ID for partitioning
             String messageKey = event.getAggregateId();
 
-            log.debug(" Publishing outbox event: id={}, aggregateId={}, eventType={}, topic={}, retryCount={}/{}",
-                     event.getId(), event.getAggregateId(), event.getEventType(), bankEventsTopic,
+            // Determine the correct topic based on aggregate type
+            String targetTopic = determineTargetTopic(event);
+
+            log.debug(" Publishing outbox event: id={}, aggregateId={}, aggregateType={}, eventType={}, topic={}, retryCount={}/{}",
+                     event.getId(), event.getAggregateId(), event.getAggregateType(), event.getEventType(), targetTopic,
                      event.getRetryCount(), event.getMaxRetries());
 
             // Send message to Kafka asynchronously with timeout
-            CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(bankEventsTopic, messageKey, payload);
+            CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(targetTopic, messageKey, payload);
 
             // Add timeout handling to prevent hanging
             CompletableFuture<SendResult<String, String>> timeoutFuture = future
@@ -119,7 +125,7 @@ public class OutboxPublisher {
                             log.warn(" Kafka send operation timed out or failed for event id: {}, error: {}",
                                     event.getId(), exception.getMessage());
                         }
-                        handleKafkaResult(event, result, exception);
+                        handleKafkaResult(event, result, exception, targetTopic);
                     });
 
         } catch (Exception ex) {
@@ -159,28 +165,30 @@ public class OutboxPublisher {
      * @param event The original outbox event
      * @param result The Kafka send result (null if failed)
      * @param exception The exception if publishing failed (null if successful)
+     * @param targetTopic The Kafka topic the event was published to
      */
-    private void handleKafkaResult(OutboxEvent event, SendResult<String, String> result, Throwable exception) {
+    private void handleKafkaResult(OutboxEvent event, SendResult<String, String> result, Throwable exception, String targetTopic) {
         if (exception == null && result != null) {
             // Success case
-            handleSuccessfulPublishing(event, result);
+            handleSuccessfulPublishing(event, result, targetTopic);
         } else {
             // Failure case
-            handleFailedPublishing(event, exception);
+            handleFailedPublishing(event, exception, targetTopic);
         }
     }
 
     /**
      * Handles successful event publishing.
      */
-    private void handleSuccessfulPublishing(OutboxEvent event, SendResult<String, String> result) {
+    private void handleSuccessfulPublishing(OutboxEvent event, SendResult<String, String> result, String targetTopic) {
         try {
             outboxService.markEventAsPublished(event.getId(), event.getIdempotencyKey());
 
-            log.info("Successfully published event: id={}, aggregateId={}, topic={}, partition={}, offset={}",
+            log.info("Successfully published event: id={}, aggregateId={}, aggregateType={}, topic={}, partition={}, offset={}",
                     event.getId(),
                     event.getAggregateId(),
-                    bankEventsTopic,
+                    event.getAggregateType(),
+                    targetTopic,
                     result.getRecordMetadata().partition(),
                     result.getRecordMetadata().offset());
 
@@ -193,7 +201,7 @@ public class OutboxPublisher {
     /**
      * Handles failed event publishing with comprehensive error logging and diagnosis.
      */
-    private void handleFailedPublishing(OutboxEvent event, Throwable exception) {
+    private void handleFailedPublishing(OutboxEvent event, Throwable exception, String targetTopic) {
         String errorMessage = exception != null ? exception.getMessage() : "Unknown error occurred";
         String rootCause = exception != null ? getRootCauseMessage(exception) : "Unknown";
 
@@ -203,8 +211,9 @@ public class OutboxPublisher {
             log.error("  KAFKA SEND FAILED - Event Publishing Error Details:");
             log.error("    Event ID: {}", event.getId());
             log.error("     Aggregate ID: {}", event.getAggregateId());
+            log.error("     Aggregate Type: {}", event.getAggregateType());
             log.error("     Event Type: {}", event.getEventType());
-            log.error("     Topic: {}", bankEventsTopic);
+            log.error("     Topic: {}", targetTopic);
             log.error("     Error Message: {}", errorMessage);
             log.error("     Root Cause: {}", rootCause);
             log.error("     Created At: {}", event.getCreatedAt());
@@ -282,5 +291,30 @@ public class OutboxPublisher {
             message.contains("JSON") ||
             exception instanceof com.fasterxml.jackson.core.JsonProcessingException
         );
+    }
+
+    /**
+     * Determines the target Kafka topic based on the aggregate type.
+     * Routes BANK_ACCOUNT events to account-events topic and TRANSACTION events to transaction-events topic.
+     *
+     * @param event The outbox event
+     * @return The target Kafka topic name
+     */
+    private String determineTargetTopic(OutboxEvent event) {
+        String aggregateType = event.getAggregateType();
+
+        if ("BANK_ACCOUNT".equalsIgnoreCase(aggregateType)) {
+            log.debug("Routing event to account-events topic: eventId={}, aggregateType={}",
+                     event.getId(), aggregateType);
+            return accountEventsTopic;
+        } else if ("TRANSACTION".equalsIgnoreCase(aggregateType)) {
+            log.debug("Routing event to transaction-events topic: eventId={}, aggregateType={}",
+                     event.getId(), aggregateType);
+            return transactionEventsTopic;
+        } else {
+            log.warn("Unknown aggregate type '{}' for event id={}. Defaulting to transaction-events topic.",
+                    aggregateType, event.getId());
+            return transactionEventsTopic;
+        }
     }
 }

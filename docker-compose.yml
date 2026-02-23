@@ -76,10 +76,11 @@ services:
       - bank-simulator-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok", "--host", "localhost", "--username", "admin", "--password", "admin123", "--authenticationDatabase", "admin"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 40s
 
   mongo-express:
     image: mongo-express:latest

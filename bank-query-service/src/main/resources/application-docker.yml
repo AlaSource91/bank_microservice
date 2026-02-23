@@ -1,0 +1,14 @@
+spring:
+  data:
+    mongodb:
+      host: mongo
+      port: 27017
+  redis:
+    host: redis
+    port: 6379
+
+  kafka:
+   bootstrap-servers: kafka:9092
+
+server:
+    port: 5052

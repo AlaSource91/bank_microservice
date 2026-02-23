@@ -1,30 +1,27 @@
-package com.alaeldin.bank_simulator_service.model;
+package com.alaeldin.bank_query_service.model.event;
 
-import com.alaeldin.bank_simulator_service.constant.AccountStatus;
-import com.alaeldin.bank_simulator_service.constant.AccountType;
+import com.alaeldin.bank_query_service.constant.AccountStatus;
+import com.alaeldin.bank_query_service.constant.AccountType;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.google.errorprone.annotations.Immutable;
-import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@Data
 @Builder
-@Getter
-@Immutable
 @NoArgsConstructor
 @AllArgsConstructor
-public class BankAccountEvent
-{
+public class AccountEvent {
 
+    private String id;
     private String eventId;
     private String accountNumber;
     private String accountHolderName;
-    private AccountType accountType;
+    private AccountType accountType;  // FIXED: Changed from AccountEventType to AccountType
     private String eventType;
     private BigDecimal balance;
     private AccountStatus status;
@@ -32,5 +29,4 @@ public class BankAccountEvent
     private LocalDateTime timestamp;
     private String applicationName;
     private String version;
-
 }
