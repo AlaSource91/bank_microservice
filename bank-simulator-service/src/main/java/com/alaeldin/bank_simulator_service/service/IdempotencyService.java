@@ -91,7 +91,7 @@ public class IdempotencyService
         {
             log.warn("Request body does not match previous request for idempotency key: {}", maskKey(key));
             throw new IllegalArgumentException(
-                "Request body does not match previous request for idempotency key: " + key);
+               "Request body does not match previous request for idempotency key: " + key);
         }
 
         if (idempotencyRecord.isExpired())

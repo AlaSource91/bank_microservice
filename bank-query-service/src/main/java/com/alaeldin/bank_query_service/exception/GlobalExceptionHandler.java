@@ -40,6 +40,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles TransactionNotFoundException (404 Not Found).
+     *
+     * @param ex the exception
+     * @return error response with 404 status
+     */
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleTransactionNotFound(TransactionNotFoundException ex) {
+        log.warn("Transaction not found: {}", ex.getMessage());
+
+        Map<String, Object> errorResponse = buildErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                "Transaction Not Found",
+                ex.getMessage()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    /**
      * Handles IllegalArgumentException (400 Bad Request).
      *
      * @param ex the exception

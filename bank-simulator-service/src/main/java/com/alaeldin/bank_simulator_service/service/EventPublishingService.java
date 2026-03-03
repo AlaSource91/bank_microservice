@@ -15,6 +15,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -374,15 +375,23 @@ public class EventPublishingService {
      * @return Constructed TransactionEvent
      */
     private TransactionEvent buildTransactionEvent(BankTransaction transaction, EventType eventType) {
+
         return TransactionEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .transactionId(transaction.getReferenceId())
                 .eventType(eventType.getEventName())
+                .statusTransaction(transaction.getStatus())
                 .sourceAccount(transaction.getSourceAccount().getAccountNumber())
+                .sourceAccountHolderName(transaction.getSourceAccount().getAccountHolderName())
                 .destinationAccount(transaction.getDestinationAccount().getAccountNumber())
+                .destinationAccountHolderName(transaction.getDestinationAccount().getAccountHolderName())
                 .amount(transaction.getAmount())
+                .sourceBalanceAfter(transaction.getSourceAccount().getBalance())
+                .destinationBalanceAfter(transaction.getDestinationAccount().getBalance())
                 .description(transaction.getDescription())
-                .timestamp(LocalDateTime.now())
+                .createdAt(transaction.getCreatedAt())
+                .transactionDate(transaction.getTransactionDate())
+                .failureReason(transaction.getErrorMessage())
                 .completedAt(transaction.getCompletedAt())
                 .applicationName(applicationName)
                 .version(applicationVersion)

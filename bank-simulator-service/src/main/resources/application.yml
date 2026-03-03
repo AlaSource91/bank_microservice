@@ -89,6 +89,7 @@ app:
     topic:
       transaction-events: bank.transaction.events     # Main topic for transaction events
       account-events: bank.account.events
+      ledger-events: bank.ledger.events
   outbox:
     batch-size: 20           # Events to process per batch
     max-retries: 3           # Max retry attempts per event

@@ -61,13 +61,15 @@ public class BankTransactionService {
      * @param accountVersionService the service for distributed locking and version control
      * @param bankTransactionRepository the repository for database operations
      * @param bankAccountRepository the repository for bank account operations
+     * @param ledgerService the service for ledger operations
+     * @param eventPublishingService the service for publishing events
      */
     public BankTransactionService(BankAccountService bankAccountService,
                                    AccountVersionService accountVersionService,
                                    BankTransactionRepository bankTransactionRepository,
-                                   BankAccountRepository bankAccountRepository
-            ,LedgerService ledgerService
-            ,EventPublishingService eventPublishingService) {
+                                   BankAccountRepository bankAccountRepository,
+                                   LedgerService ledgerService,
+                                   EventPublishingService eventPublishingService) {
         this.bankAccountService = bankAccountService;
         this.accountVersionService = accountVersionService;
         this.bankTransactionRepository = bankTransactionRepository;
@@ -176,7 +178,11 @@ public class BankTransactionService {
             txn.setCompletedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());
             txn = bankTransactionRepository.save(txn);
+
+            // Create ledger entries (this will also publish ledger events)
             ledgerService.createLedgerEntries(txn);
+
+            // Publish transaction completed event
             eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_COMPLETED);
 
             log.info("Transfer completed successfully - Reference: {}, Amount: {}",

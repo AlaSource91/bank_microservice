@@ -15,14 +15,11 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccountEvent {
+public class AccountEvent extends BaseEvent {
 
-    private String id;
-    private String eventId;
-    private String accountNumber;
+
     private String accountHolderName;
     private AccountType accountType;  // FIXED: Changed from AccountEventType to AccountType
-    private String eventType;
     private BigDecimal balance;
     private AccountStatus status;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

@@ -52,6 +52,8 @@ public class OutboxPublisher {
 
     @Value("${app.kafka.topic.account-events:bank.account.events}")
     private String accountEventsTopic;
+    @Value("${app.kafka.topic.ledger-events:bank.ledger.events}")
+    private String ledgerEventsTopic;
 
     @Value("${app.outbox.batch-size:20}")
     private int batchSize;
@@ -311,7 +313,14 @@ public class OutboxPublisher {
             log.debug("Routing event to transaction-events topic: eventId={}, aggregateType={}",
                      event.getId(), aggregateType);
             return transactionEventsTopic;
-        } else {
+        }
+         else if("LEDGER".equalsIgnoreCase(aggregateType)) {
+            log.debug("Routing event to ledger-events topic: eventId={}, aggregateType={}",
+                    event.getId(), aggregateType);
+            return ledgerEventsTopic;
+
+        }
+        else {
             log.warn("Unknown aggregate type '{}' for event id={}. Defaulting to transaction-events topic.",
                     aggregateType, event.getId());
             return transactionEventsTopic;

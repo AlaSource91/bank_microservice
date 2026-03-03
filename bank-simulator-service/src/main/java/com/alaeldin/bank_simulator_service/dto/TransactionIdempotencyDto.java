@@ -1,8 +1,8 @@
 
-package com.alaeldin.bank_simulator_service.model;
+package com.alaeldin.bank_simulator_service.dto;
 
 import com.alaeldin.bank_simulator_service.constant.IdempotencyStatus;
-import jakarta.persistence.*;
+import com.alaeldin.bank_simulator_service.model.BankTransaction;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

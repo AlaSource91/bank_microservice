@@ -1,5 +1,6 @@
 package com.alaeldin.bank_simulator_service.service;
 
+import com.alaeldin.bank_simulator_service.constant.EventType;
 import com.alaeldin.bank_simulator_service.constant.LedgerEntryType;
 import com.alaeldin.bank_simulator_service.dto.LedgerEntriesPage;
 import com.alaeldin.bank_simulator_service.exception.ResourceNotFoundException;
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
 public class LedgerService {
 
     private final TransactionLedgerRepository repository;
+    private final EventPublishLedgerAccountService eventPublishLedgerAccountService;
 
     /**
      * Creates double-entry ledger entries for a bank transaction.
@@ -94,6 +96,20 @@ public class LedgerService {
 
             log.info(" Successfully created {} ledger entries for transaction: {} - Debit: {}, Credit: {}",
                     entries.size(), transactionRef, debitEntry.getLedgerEntryId(), creditEntry.getLedgerEntryId());
+
+            // Publish ledger events for both entries
+            try {
+                eventPublishLedgerAccountService.publishEventWithOutboxSupport(
+                        debitEntry, com.alaeldin.bank_simulator_service.constant.EventType.LEDGER_ENTRY_CREATED);
+                 Thread.sleep(5000);
+                eventPublishLedgerAccountService.publishEventWithOutboxSupport(
+                        creditEntry, com.alaeldin.bank_simulator_service.constant.EventType.LEDGER_ENTRY_CREATED);
+                log.debug("Published ledger events for transaction: {}", transactionRef);
+            } catch (Exception eventException) {
+                log.error("Failed to publish ledger events for transaction: {} - Error: {}",
+                        transactionRef, eventException.getMessage(), eventException);
+                // Continue execution - ledger entries are saved, event publishing failure is not critical
+            }
 
             // Log cache eviction
             log.debug("Evicted ledger caches after creating entries for transaction: {}", transactionRef);

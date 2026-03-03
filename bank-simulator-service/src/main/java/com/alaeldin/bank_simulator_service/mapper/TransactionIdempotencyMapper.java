@@ -1,7 +1,7 @@
 package com.alaeldin.bank_simulator_service.mapper;
 
 import com.alaeldin.bank_simulator_service.model.TransactionIdempotency;
-import com.alaeldin.bank_simulator_service.model.TransactionIdempotencyDto;
+import com.alaeldin.bank_simulator_service.dto.TransactionIdempotencyDto;
 
 public interface TransactionIdempotencyMapper
 {

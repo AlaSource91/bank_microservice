@@ -86,7 +86,7 @@ public class AccountQueryService {
      * @return a page of AccountQueryResponse matching the search criteria
      * @throws IllegalArgumentException if accountHolderName is null or empty, or if pageable is invalid
      */
-    @Cacheable(value = "accountSearch", key = "#accountHolderName.trim().toLowerCase() + '-' + #pageable.pageNumber + '-' + #pageable.pageSize",  unless = "#result == null || #result.isEmpty()")
+    @Cacheable(value = "accountSearch", key = "#accountHolderName.trim().toLowerCase() + '-' + #pageable.pageNumber + '-' + #pageable.pageSize",  unless = "#result == null || #result.content.isEmpty()")
     public PageResponse<AccountQueryResponse> searchAccountByHolderName(String accountHolderName, Pageable pageable) {
         validateHolderName(accountHolderName);
         validatePageable(pageable);

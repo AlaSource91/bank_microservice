@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Document("account_statistics")
 @Data
@@ -27,5 +28,5 @@ public class AccountStatisticsReadModel
    private BigDecimal netFlow;
    private BigDecimal openingBalance;
    private BigDecimal closingBalance;
-   private LocalDate calculatedAt;
+   private LocalDateTime calculatedAt;
 }

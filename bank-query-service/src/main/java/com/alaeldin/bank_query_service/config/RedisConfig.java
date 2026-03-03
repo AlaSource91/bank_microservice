@@ -50,6 +50,7 @@ public class RedisConfig {
         return template;
     }
 
+
     /**
      * Create a custom Jackson-based Redis serializer for caching complex types.
      * This serializer properly handles BigDecimal, LocalDateTime, Page objects, and other Java objects.
@@ -145,13 +146,13 @@ public class RedisConfig {
         cacheConfigurations.put("accountDetails", defaultConfig.entryTtl(Duration.ofMinutes(5)));
         cacheConfigurations.put("accountBalance", defaultConfig.entryTtl(Duration.ofMinutes(5)));
         cacheConfigurations.put("accounts", defaultConfig.entryTtl(Duration.ofMinutes(5)));
-
+        cacheConfigurations.put("transactionHistory", defaultConfig.entryTtl(Duration.ofSeconds(60)));
         // Search and list caches - 3 minutes (shorter TTL for dynamic results)
         cacheConfigurations.put("accountSearch", defaultConfig.entryTtl(Duration.ofMinutes(3)));
         cacheConfigurations.put("allAccounts", defaultConfig.entryTtl(Duration.ofMinutes(3)));
-
-        // Transaction cache - 3 minutes
-        cacheConfigurations.put("transactions", defaultConfig.entryTtl(Duration.ofMinutes(3)));
+        cacheConfigurations.put("transactions", defaultConfig.entryTtl(Duration.ofMinutes(10)));
+        cacheConfigurations.put("searchTransactions",defaultConfig.entryTtl(Duration.ofSeconds(30)));
+        // Transaction cache - 60 seconds (short TTL due to high volatility of transaction data)
 
         // Statistics cache - 10 minutes
         cacheConfigurations.put("statistics", defaultConfig.entryTtl(Duration.ofMinutes(10)));
