@@ -3,6 +3,8 @@ package com.alaeldin.bank_simulator_service.repository;
 import com.alaeldin.bank_simulator_service.constant.StatusTransaction;
 import com.alaeldin.bank_simulator_service.model.BankAccount;
 import com.alaeldin.bank_simulator_service.model.BankTransaction;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.Optional;
  *   <li>findByStatus - Retrieve all transactions with a specific status</li>
  *   <li>findBySourceAccount - Retrieve all transactions from a specific source account</li>
  *   <li>findByDestinationAccount - Retrieve all transactions to a specific destination account</li>
+ *   <li>findBySourceAccountOrDestinationAccount - Retrieve paginated transaction history for an account</li>
  * </ul>
  *
  * @see com.alaeldin.bank_simulator_service.model.BankTransaction
@@ -61,4 +64,19 @@ public interface BankTransactionRepository extends JpaRepository<BankTransaction
      * @return a List of BankTransactions to the specified destination account. Returns an empty list if no transactions found.
      */
     List<BankTransaction> findByDestinationAccount(BankAccount destinationAccount);
+
+    /**
+     * Retrieves a paginated list of all transactions where the given account
+     * is either the source or the destination.
+     *
+     * <p>Pass the same {@code BankAccount} instance for both parameters to match
+     * all transactions involving that account.</p>
+     *
+     * @param sourceAccount      the account to match as source
+     * @param destinationAccount the account to match as destination
+     * @param pageable           pagination and sorting parameters
+     * @return a Page of matching {@link BankTransaction} records
+     */
+    Page<BankTransaction> findBySourceAccountOrDestinationAccount(
+            BankAccount sourceAccount, BankAccount destinationAccount, Pageable pageable);
 }

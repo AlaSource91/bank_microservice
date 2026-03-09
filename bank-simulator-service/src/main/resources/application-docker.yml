@@ -83,13 +83,20 @@ eureka:
 app:
   kafka:
     topic:
-      bank-events: bank.events
+      transaction-events:   bank.transaction.events
+      account-events:       bank.account.events
+      ledger-events:        bank.ledger.events
+      saga-events:          bank.saga.events
+      debit-events:         bank.debit.events
+      credit-events:        bank.credit.events
+      compensation-events:  bank.compensation.events
   outbox:
     batch-size: 20
     max-retries: 3
     cleanup-days: 7
     stale-threshold: 30
     publish-timeout-seconds: 30
+    poll-interval-ms: 10000
 
 # Logging Configuration for Docker
 logging:

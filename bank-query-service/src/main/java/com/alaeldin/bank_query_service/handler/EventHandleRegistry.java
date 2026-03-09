@@ -3,6 +3,7 @@ package com.alaeldin.bank_query_service.handler;
 import com.alaeldin.bank_query_service.model.event.AccountEvent;
 import com.alaeldin.bank_query_service.model.event.BaseEvent;
 import com.alaeldin.bank_query_service.model.event.LedgerEvent;
+import com.alaeldin.bank_query_service.model.event.SagaEvent;
 import com.alaeldin.bank_query_service.model.event.TransactionEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class EventHandleRegistry {
     private final AccountEventHandler accountEventHandler;
     private final LedgerEventHandler ledgerEventHandler;
     private final TransactionEventHandler transactionEventHandler;
+    private final SagaEventHandler sagaEventHandler;
 
     /**
      * Routes an event to the appropriate handler based on event type.
@@ -41,6 +43,18 @@ public class EventHandleRegistry {
                 case "LEDGER_ENTRY_CREATED"  -> handleLedgerEntry(event);
                 case "TRANSACTION_COMPLETED", "transaction_completed" -> handleTransactionCompleted(event);
                 case "TRANSACTION_FAILED",   "transaction_failed"     -> handleTransactionFailed(event);
+                // Saga lifecycle
+                case "saga.started"          -> handleSagaEvent(event, sagaEventHandler::handleSagaStarted);
+                case "saga.completed"        -> handleSagaEvent(event, sagaEventHandler::handleSagaCompleted);
+                case "saga.failed"           -> handleSagaEvent(event, sagaEventHandler::handleSagaFailed);
+                case "saga.compensated"      -> handleSagaEvent(event, sagaEventHandler::handleSagaCompensated);
+                // Debit step
+                case "debit.completed"       -> handleSagaEvent(event, sagaEventHandler::handleDebitCompleted);
+                case "debit.failed"          -> handleSagaEvent(event, sagaEventHandler::handleDebitFailed);
+                case "debit.reversed"        -> handleSagaEvent(event, sagaEventHandler::handleDebitReversed);
+                // Credit step
+                case "credit.completed"      -> handleSagaEvent(event, sagaEventHandler::handleCreditCompleted);
+                case "credit.failed"         -> handleSagaEvent(event, sagaEventHandler::handleCreditFailed);
                 default -> log.warn("Unhandled event type: {} - EventId: {}. Skipping.", eventType, event.getEventId());
             }
             log.info("Successfully processed event - Type: {}, EventId: {}", eventType, event.getEventId());
@@ -103,6 +117,14 @@ public class EventHandleRegistry {
             ledgerEventHandler.handleLedgerEntryCreated(ledgerEvent);
         } else {
             throw new ClassCastException("Expected LedgerEvent but got: " + event.getClass().getSimpleName());
+        }
+    }
+
+    private void handleSagaEvent(BaseEvent event, java.util.function.Consumer<SagaEvent> handler) {
+        if (event instanceof SagaEvent sagaEvent) {
+            handler.accept(sagaEvent);
+        } else {
+            throw new ClassCastException("Expected SagaEvent but got: " + event.getClass().getSimpleName());
         }
     }
 

@@ -1,7 +1,6 @@
 package com.alaeldin.bank_query_service.consumer;
 
 import com.alaeldin.bank_query_service.handler.EventHandleRegistry;
-import com.alaeldin.bank_query_service.model.event.AccountEvent;
 import com.alaeldin.bank_query_service.model.event.BaseEvent;
 import com.alaeldin.bank_query_service.service.EventDeserializationService;
 import com.alaeldin.bank_query_service.service.IdempotencyService;
@@ -49,7 +48,15 @@ public class BankEventConsumer {
      * @param acknowledgment manual acknowledgment handler
      */
     @KafkaListener(
-            topics = {"bank.account.events", "bank.transaction.events", "bank.ledger.events"},
+            topics = {
+                "bank.account.events",
+                "bank.transaction.events",
+                "bank.ledger.events",
+                "bank.saga.events",
+                "bank.debit.events",
+                "bank.credit.events",
+                "bank.compensation.events"
+            },
             groupId = "${spring.kafka.consumer.group-id}",
             containerFactory = "kafkaListenerContainerFactory"
     )

@@ -2,328 +2,149 @@ package com.alaeldin.bank_simulator_service.job;
 
 import com.alaeldin.bank_simulator_service.model.OutboxEvent;
 import com.alaeldin.bank_simulator_service.service.OutboxService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alaeldin.bank_simulator_service.util.KafkaErrorClassifier;
+import com.alaeldin.bank_simulator_service.util.TopicResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
-import java.time.Duration;
+
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-
 /**
- * OutboxPublisher is responsible for publishing events
- * from the outbox table to Kafka.
+ * Scheduled poller that drains the outbox table and publishes each event to
+ * the appropriate Kafka topic.
  *
- * This component implements the Outbox Pattern
- * to ensure reliable event delivery
- * in a distributed system. It periodically polls the outbox table for unpublished
- * events and publishes them to Kafka topics.
+ * <p>Responsibilities of this class:
+ * <ul>
+ *   <li>Poll a batch of locked outbox events via {@link OutboxService}.</li>
+ *   <li>Dispatch each event to Kafka (fire-and-forget with timeout).</li>
+ *   <li>Delegate success/failure bookkeeping back to {@link OutboxService}.</li>
+ * </ul>
  *
- * Key Features:
- * - Batch processing for improved performance
- * - Automatic retry with exponential backoff
- * - Comprehensive error handling and logging
- * - Graceful handling of serialization failures
- * - Proper transaction management
- *
- * @author Alaeldin
- * @version 1.0
+ * <p>Topic routing is handled by {@link TopicResolver};
+ * error classification is handled by {@link KafkaErrorClassifier}.
  */
-@Service
+@Component
 @Slf4j
 @RequiredArgsConstructor
-@EnableScheduling
 public class OutboxPublisher {
 
     private final OutboxService outboxService;
     private final KafkaTemplate<String, String> kafkaTemplate;
-    private final ObjectMapper objectMapper;
-
-    @Value("${app.kafka.topic.transaction-events:bank.transaction.events}")
-    private String transactionEventsTopic;
-
-    @Value("${app.kafka.topic.account-events:bank.account.events}")
-    private String accountEventsTopic;
-    @Value("${app.kafka.topic.ledger-events:bank.ledger.events}")
-    private String ledgerEventsTopic;
+    private final TopicResolver topicResolver;
 
     @Value("${app.outbox.batch-size:20}")
     private int batchSize;
 
-    @Value("${app.outbox.max-retries:3}")
-    private int maxRetries;
-
     @Value("${app.outbox.publish-timeout-seconds:30}")
     private int publishTimeoutSeconds;
 
-    /**
-     * Scheduled method that runs every 10 seconds to publish outbox events to Kafka.
-     * This method processes events in batches for better performance.
-     */
-    @Scheduled(fixedDelay = 10000)
+    // -------------------------------------------------------------------------
+    // Scheduled entry point
+    // -------------------------------------------------------------------------
+
+    @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:10000}")
     public void publishOutboxEvents() {
         try {
             List<OutboxEvent> events = outboxService.lockBatchForPublishing(batchSize);
-
             if (CollectionUtils.isEmpty(events)) {
-                log.debug("No unpublished outbox events found");
+                log.debug("No pending outbox events");
                 return;
             }
-
-            log.info(" Processing {} outbox events for publishing", events.size());
-
-            for (OutboxEvent event : events) {
-                publishSingleEvent(event);
-            }
-
-            log.info("Completed processing {} outbox events", events.size());
-
+            log.info("Processing {} outbox event(s)", events.size());
+            events.forEach(this::publishSingleEvent);
         } catch (Exception ex) {
-            log.error(" Error during scheduled outbox event publishing: {}", ex.getMessage(), ex);
+            log.error("Outbox polling cycle failed: {}", ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Publishes a single event to Kafka with proper error handling, timeout, and callback management.
-     *
-     * @param event The OutboxEvent to be published
-     */
+    // -------------------------------------------------------------------------
+    // Single-event publishing
+    // -------------------------------------------------------------------------
+
     private void publishSingleEvent(OutboxEvent event) {
-        if (event == null) {
-            log.warn("Attempted to publish null event, skipping");
-            return;
-        }
+        String payload = resolvePayload(event);
+        String topic   = topicResolver.resolve(event.getAggregateType());
+
+        log.debug("Publishing event: id={}, aggregateId={}, type={}, topic={}, attempt={}/{}",
+                event.getId(), event.getAggregateId(), event.getEventType(),
+                topic, event.getRetryCount() + 1, event.getMaxRetries());
 
         try {
-            // Serialize the event payload
-            String payload = serializeEventPayload(event);
-
-            // Create Kafka message key using aggregate ID for partitioning
-            String messageKey = event.getAggregateId();
-
-            // Determine the correct topic based on aggregate type
-            String targetTopic = determineTargetTopic(event);
-
-            log.debug(" Publishing outbox event: id={}, aggregateId={}, aggregateType={}, eventType={}, topic={}, retryCount={}/{}",
-                     event.getId(), event.getAggregateId(), event.getAggregateType(), event.getEventType(), targetTopic,
-                     event.getRetryCount(), event.getMaxRetries());
-
-            // Send message to Kafka asynchronously with timeout
-            CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(targetTopic, messageKey, payload);
-
-            // Add timeout handling to prevent hanging
-            CompletableFuture<SendResult<String, String>> timeoutFuture = future
+            kafkaTemplate.send(topic, event.getAggregateId(), payload)
                     .orTimeout(publishTimeoutSeconds, TimeUnit.SECONDS)
-                    .whenComplete((result, exception) -> {
-                        if (exception != null) {
-                            log.warn(" Kafka send operation timed out or failed for event id: {}, error: {}",
-                                    event.getId(), exception.getMessage());
-                        }
-                        handleKafkaResult(event, result, exception, targetTopic);
-                    });
-
+                    .whenComplete((result, ex) -> handleResult(event, topic, result, ex));
         } catch (Exception ex) {
-            log.error(" Exception occurred while publishing event id: {}, error: {}",
-                     event.getId(), ex.getMessage(), ex);
+            log.error("Failed to enqueue event id={}: {}", event.getId(), ex.getMessage(), ex);
             outboxService.markEventAsFailed(event.getId(), ex.getMessage());
         }
     }
 
-    /**
-     * Safely retrieves the event payload as JSON string.
-     * The eventPayload is already serialized as JSON when stored in the outbox.
-     *
-     * @param event The outbox event containing the payload
-     * @return JSON string payload or empty JSON object if payload is null
-     */
-    private String serializeEventPayload(OutboxEvent event) {
-        try {
-            String eventPayload = event.getEventPayload();
-            if (eventPayload == null || eventPayload.trim().isEmpty()) {
-                log.warn(" Event payload is null or empty for event id: {}", event.getId());
-                return "{}"; // Return empty JSON object for null/empty payload
-            }
+    // -------------------------------------------------------------------------
+    // Result handlers
+    // -------------------------------------------------------------------------
 
-            return eventPayload;
-
-        } catch (Exception ex) {
-            log.error(" Failed to retrieve event payload for event id: {}, error: {}",
-                     event.getId(), ex.getMessage(), ex);
-            return "{}";
-        }
-    }
-
-    /**
-     * Handles the result of Kafka message publishing.
-     *
-     * @param event The original outbox event
-     * @param result The Kafka send result (null if failed)
-     * @param exception The exception if publishing failed (null if successful)
-     * @param targetTopic The Kafka topic the event was published to
-     */
-    private void handleKafkaResult(OutboxEvent event, SendResult<String, String> result, Throwable exception, String targetTopic) {
-        if (exception == null && result != null) {
-            // Success case
-            handleSuccessfulPublishing(event, result, targetTopic);
+    private void handleResult(OutboxEvent event, String topic,
+                               SendResult<String, String> result, Throwable ex) {
+        if (ex == null) {
+            onSuccess(event, topic, result);
         } else {
-            // Failure case
-            handleFailedPublishing(event, exception, targetTopic);
+            onFailure(event, topic, ex);
         }
     }
 
-    /**
-     * Handles successful event publishing.
-     */
-    private void handleSuccessfulPublishing(OutboxEvent event, SendResult<String, String> result, String targetTopic) {
+    private void onSuccess(OutboxEvent event, String topic, SendResult<String, String> result) {
         try {
             outboxService.markEventAsPublished(event.getId(), event.getIdempotencyKey());
-
-            log.info("Successfully published event: id={}, aggregateId={}, aggregateType={}, topic={}, partition={}, offset={}",
-                    event.getId(),
-                    event.getAggregateId(),
-                    event.getAggregateType(),
-                    targetTopic,
+            log.info("Published event: id={}, topic={}, partition={}, offset={}",
+                    event.getId(), topic,
                     result.getRecordMetadata().partition(),
                     result.getRecordMetadata().offset());
-
         } catch (Exception ex) {
-            log.error(" Failed to mark event as published: eventId={}, error={}",
-                     event.getId(), ex.getMessage(), ex);
+            log.error("Failed to mark event id={} as published: {}", event.getId(), ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Handles failed event publishing with comprehensive error logging and diagnosis.
-     */
-    private void handleFailedPublishing(OutboxEvent event, Throwable exception, String targetTopic) {
-        String errorMessage = exception != null ? exception.getMessage() : "Unknown error occurred";
-        String rootCause = exception != null ? getRootCauseMessage(exception) : "Unknown";
+    private void onFailure(OutboxEvent event, String topic, Throwable ex) {
+        String errorMsg  = ex.getMessage();
+        String rootCause = KafkaErrorClassifier.rootMessage(ex);
 
         try {
-            outboxService.markEventAsFailed(event.getId(), errorMessage);
+            outboxService.markEventAsFailed(event.getId(), errorMsg);
+        } catch (Exception markEx) {
+            log.error("Failed to mark event id={} as failed: {}", event.getId(), markEx.getMessage(), markEx);
+        }
 
-            log.error("  KAFKA SEND FAILED - Event Publishing Error Details:");
-            log.error("    Event ID: {}", event.getId());
-            log.error("     Aggregate ID: {}", event.getAggregateId());
-            log.error("     Aggregate Type: {}", event.getAggregateType());
-            log.error("     Event Type: {}", event.getEventType());
-            log.error("     Topic: {}", targetTopic);
-            log.error("     Error Message: {}", errorMessage);
-            log.error("     Root Cause: {}", rootCause);
-            log.error("     Created At: {}", event.getCreatedAt());
+        log.error("Kafka send failed: id={}, aggregateId={}, type={}, topic={}, error={}",
+                event.getId(), event.getAggregateId(), event.getEventType(), topic, errorMsg);
 
-            // Log additional troubleshooting info
-            if (exception != null) {
-                log.error("    🔧 Exception Type: {}", exception.getClass().getSimpleName());
-
-                // Check for specific Kafka-related errors
-                if (isKafkaConnectivityIssue(exception)) {
-                    log.error("     DIAGNOSIS: Kafka connectivity issue detected!");
-                    log.error("     SOLUTION: Check if Kafka is running on localhost:9092");
-                    log.error("      Run: docker-compose ps to verify Kafka status");
-                } else if (isKafkaTimeoutIssue(exception)) {
-                    log.error("     DIAGNOSIS: Kafka timeout issue detected!");
-                    log.error("     SOLUTION: Consider increasing timeout values");
-                } else if (isSerializationIssue(exception)) {
-                    log.error("     DIAGNOSIS: Event serialization issue detected!");
-                    log.error("     SOLUTION: Check event payload format");
-                }
-            }
-
-        } catch (Exception ex) {
-            log.error(" Failed to mark event as failed: eventId={}, originalError={}, markFailedError={}",
-                     event.getId(), errorMessage, ex.getMessage(), ex);
+        switch (KafkaErrorClassifier.classify(ex)) {
+            case CONNECTIVITY  -> log.error("  Diagnosis: Kafka unreachable — verify broker at bootstrap server");
+            case TIMEOUT       -> log.error("  Diagnosis: Timeout — consider raising publish-timeout-seconds (root: {})", rootCause);
+            case SERIALIZATION -> log.error("  Diagnosis: Serialization error — check event payload format (root: {})", rootCause);
+            default            -> log.error("  Root cause: {}", rootCause);
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     /**
-     * Helper method to get root cause of exception
+     * Returns the stored JSON payload, or an empty JSON object when absent.
      */
-    private String getRootCauseMessage(Throwable exception) {
-        Throwable rootCause = exception;
-        while (rootCause.getCause() != null) {
-            rootCause = rootCause.getCause();
+    private String resolvePayload(OutboxEvent event) {
+        String payload = event.getEventPayload();
+        if (payload == null || payload.isBlank()) {
+            log.warn("Empty payload for event id={} — using '{}'", event.getId(), "{}");
+            return "{}";
         }
-        return rootCause.getMessage();
-    }
-
-    /**
-     * Helper method to check if error is related to Kafka connectivity
-     */
-    private boolean isKafkaConnectivityIssue(Throwable exception) {
-        String message = exception.getMessage();
-        return message != null && (
-            message.contains("Connection to node") ||
-            message.contains("Failed to send") ||
-            message.contains("Connection refused") ||
-            message.contains("Network is unreachable") ||
-            message.contains("bootstrap servers")
-        );
-    }
-
-    /**
-     * Helper method to check if error is related to timeout
-     */
-    private boolean isKafkaTimeoutIssue(Throwable exception) {
-        String message = exception.getMessage();
-        return message != null && (
-            message.contains("timeout") ||
-            message.contains("Timeout") ||
-            message.contains("TIMEOUT") ||
-            exception instanceof java.util.concurrent.TimeoutException
-        );
-    }
-
-    /**
-     * Helper method to check if error is related to serialization
-     */
-    private boolean isSerializationIssue(Throwable exception) {
-        String message = exception.getMessage();
-        return message != null && (
-            message.contains("serialization") ||
-            message.contains("serialize") ||
-            message.contains("JSON") ||
-            exception instanceof com.fasterxml.jackson.core.JsonProcessingException
-        );
-    }
-
-    /**
-     * Determines the target Kafka topic based on the aggregate type.
-     * Routes BANK_ACCOUNT events to account-events topic and TRANSACTION events to transaction-events topic.
-     *
-     * @param event The outbox event
-     * @return The target Kafka topic name
-     */
-    private String determineTargetTopic(OutboxEvent event) {
-        String aggregateType = event.getAggregateType();
-
-        if ("BANK_ACCOUNT".equalsIgnoreCase(aggregateType)) {
-            log.debug("Routing event to account-events topic: eventId={}, aggregateType={}",
-                     event.getId(), aggregateType);
-            return accountEventsTopic;
-        } else if ("TRANSACTION".equalsIgnoreCase(aggregateType)) {
-            log.debug("Routing event to transaction-events topic: eventId={}, aggregateType={}",
-                     event.getId(), aggregateType);
-            return transactionEventsTopic;
-        }
-         else if("LEDGER".equalsIgnoreCase(aggregateType)) {
-            log.debug("Routing event to ledger-events topic: eventId={}, aggregateType={}",
-                    event.getId(), aggregateType);
-            return ledgerEventsTopic;
-
-        }
-        else {
-            log.warn("Unknown aggregate type '{}' for event id={}. Defaulting to transaction-events topic.",
-                    aggregateType, event.getId());
-            return transactionEventsTopic;
-        }
+        return payload;
     }
 }

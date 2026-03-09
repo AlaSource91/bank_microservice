@@ -87,15 +87,30 @@ eureka:
 app:
   kafka:
     topic:
-      transaction-events: bank.transaction.events     # Main topic for transaction events
-      account-events: bank.account.events
-      ledger-events: bank.ledger.events
+      transaction-events:   bank.transaction.events   # TRANSACTION aggregate
+      account-events:       bank.account.events       # BANK_ACCOUNT aggregate
+      ledger-events:        bank.ledger.events        # LEDGER aggregate
+      saga-events:          bank.saga.events          # SAGA aggregate
+      debit-events:         bank.debit.events         # DEBIT aggregate
+      credit-events:        bank.credit.events        # CREDIT aggregate
+      compensation-events:  bank.compensation.events  # COMPENSATION aggregate
+  saga:
+    recovery:
+      stale-threshold-minutes: 10       # Minutes before a saga is considered stale
+      debit-poll-ms: 300000             # DEBIT_COMPLETED sweep interval (5 min)
+      debit-initial-delay-ms: 120000    # DEBIT_COMPLETED sweep initial delay (2 min)
+      compensation-poll-ms: 300000      # COMPENSATING sweep interval (5 min)
+      compensation-initial-delay-ms: 180000  # COMPENSATING sweep initial delay (3 min)
+      stats-poll-ms: 900000             # Stats log interval (15 min)
+      stats-initial-delay-ms: 60000     # Stats log initial delay (1 min)
+
   outbox:
-    batch-size: 20           # Events to process per batch
-    max-retries: 3           # Max retry attempts per event
-    cleanup-days: 7          # Delete old events after X days
-    stale-threshold: 30      # Minutes before PROCESSING events are considered stale
-    publish-timeout-seconds: 30  # Timeout for Kafka publishing operations
+    batch-size: 20              # Events to process per batch
+    max-retries: 3              # Max retry attempts per event
+    cleanup-days: 7             # Delete old events after X days
+    stale-threshold: 30         # Minutes before PROCESSING events are considered stale
+    publish-timeout-seconds: 30 # Timeout for Kafka publishing operations
+    poll-interval-ms: 10000     # Interval between outbox polling cycles (ms)
 
 # Cache Configuration
 cache:

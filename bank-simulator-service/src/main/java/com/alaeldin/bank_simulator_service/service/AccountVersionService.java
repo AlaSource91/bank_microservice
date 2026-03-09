@@ -120,7 +120,7 @@ public class AccountVersionService {
         log.info("Starting balance update - Account: {}, Amount: {}, Tx: {}",
                 accountNumber, amount, lockId);
 
-        // 1️⃣ Fetch managed entity (no FORCE_INCREMENT)
+        //  Fetch managed entity (no FORCE_INCREMENT)
         BankAccount account = bankAccountRepository
                 .findByAccountNumber(accountNumber)
                 .orElseThrow(() ->
