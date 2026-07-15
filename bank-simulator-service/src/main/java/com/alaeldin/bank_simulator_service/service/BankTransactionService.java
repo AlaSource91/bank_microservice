@@ -1,5 +1,6 @@
 package com.alaeldin.bank_simulator_service.service;
 
+import com.alaeldin.bank_simulator_service.component.CurrentUserUtil;
 import com.alaeldin.bank_simulator_service.constant.EventType;
 import com.alaeldin.bank_simulator_service.constant.StatusTransaction;
 import com.alaeldin.bank_simulator_service.constant.AccountStatus;
@@ -8,6 +9,7 @@ import com.alaeldin.bank_simulator_service.exception.ResourceNotFoundException;
 import com.alaeldin.bank_simulator_service.exception.AccountLockedException;
 import com.alaeldin.bank_simulator_service.model.BankAccount;
 import com.alaeldin.bank_simulator_service.model.BankTransaction;
+import com.alaeldin.bank_simulator_service.repository.BankAccountRepository;
 import com.alaeldin.bank_simulator_service.repository.BankTransactionRepository;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +22,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -56,11 +60,13 @@ public class BankTransactionService {
     private final BankTransactionRepository bankTransactionRepository;
     private final EventPublishingService eventPublishingService;
     private final SagaOrchestrationService sagaOrchestrationService;
-
+    private final BankAccountRepository bankAccountRepository;
+    private final CurrentUserUtil currentUserUtil;
     /**
      * Constructor for dependency injection.
      * Uses constructor-based injection for better testability and immutability.
-     *
+     * @param  currentUserUtil          the component for CurrentUserUtil
+     * @param bankAccountRepository     the repository for account operations
      * @param bankAccountService        the service for account operations
      * @param bankTransactionRepository the repository for database operations
      * @param sagaOrchestrationService  the service for saga orchestration
@@ -69,11 +75,15 @@ public class BankTransactionService {
     public BankTransactionService(BankAccountService bankAccountService,
                                   BankTransactionRepository bankTransactionRepository,
                                   SagaOrchestrationService sagaOrchestrationService,
-                                  EventPublishingService eventPublishingService) {
+                                  EventPublishingService eventPublishingService,
+                                  BankAccountRepository bankAccountRepository
+                                   , CurrentUserUtil  currentUserUtil) {
         this.bankAccountService = bankAccountService;
         this.bankTransactionRepository = bankTransactionRepository;
         this.eventPublishingService = eventPublishingService;
         this.sagaOrchestrationService = sagaOrchestrationService;
+        this.bankAccountRepository = bankAccountRepository;
+        this.currentUserUtil = currentUserUtil;
     }
 
     /**
@@ -108,6 +118,7 @@ public class BankTransactionService {
                 transferRequest.getDestinationAccountNumber(),
                 transferRequest.getAmount());
 
+        // Step 1: Create transaction record FIRST (always, even if it might fail)
         BankTransaction txn = createTransaction(transferRequest);
         txn.setStatus(StatusTransaction.PROCESSING);
         txn = bankTransactionRepository.save(txn);
@@ -115,20 +126,37 @@ public class BankTransactionService {
         String transactionId = txn.getReferenceId();
         log.debug("Transaction record created: referenceId={}", transactionId);
 
-        // Guard: verify sufficient balance before delegating to the Saga
-        BigDecimal sourceBalance = bankAccountService.getBalance(transferRequest.getSourceAccountNumber());
-        if (sourceBalance.compareTo(transferRequest.getAmount()) < 0) {
-            log.warn("Insufficient funds – source={} required={} available={}",
-                    transferRequest.getSourceAccountNumber(),
-                    transferRequest.getAmount(),
-                    sourceBalance);
-            return failTransaction(txn, "Insufficient funds in source account");
-        }
-
         try {
+            // Step 2: Access control - check if user owns the source account
+            BankAccount sourceAccount = bankAccountRepository.findByAccountNumber(transferRequest.getSourceAccountNumber())
+                    .orElseThrow(()-> new ResourceNotFoundException("BankAccount","AccountNumber",transferRequest.getSourceAccountNumber()));
+
+            if ("USER".equals(currentUserUtil.getRole()) && (!Objects.equals(sourceAccount.getUserId(), currentUserUtil.getUserId())))
+            {
+                log.warn("Access denied: User {} attempted to transfer FROM account {} owned by user {}",
+                        currentUserUtil.getUserId(), transferRequest.getSourceAccountNumber(), sourceAccount.getUserId());
+                txn = failTransaction(txn, "Access denied: You can only transfer from your own account");
+                eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
+                return txn;
+            }
+
+            // Step 3: Verify sufficient balance before delegating to the Saga
+            BigDecimal sourceBalance = bankAccountService.getBalance(transferRequest.getSourceAccountNumber());
+            if (sourceBalance.compareTo(transferRequest.getAmount()) < 0) {
+                log.warn("Insufficient funds – source={} required={} available={}",
+                        transferRequest.getSourceAccountNumber(),
+                        transferRequest.getAmount(),
+                        sourceBalance);
+                txn = failTransaction(txn, "Insufficient funds in source account");
+                eventPublishingService.publishEventWithOutboxSupport(txn, EventType.TRANSACTION_FAILED);
+                return txn;
+            }
+
+            // Step 4: Delegate to Saga orchestrator
             // The Saga handles debit, credit, ledger entries, and event publishing atomically
             sagaOrchestrationService.startSaga(txn);
 
+            // Step 5: Mark transaction as COMPLETED and save
             txn.setStatus(StatusTransaction.COMPLETED);
             txn.setCompletedAt(LocalDateTime.now());
             txn.setUpdatedAt(LocalDateTime.now());

@@ -35,7 +35,7 @@ public class OutboxEvent
     private LocalDateTime createdAt; // Timestamp for event creation
     @Column(name = "published_at")
     private LocalDateTime publishedAt; // Timestamp for when event was published
-   @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private OutBoxStatus status; // PENDING, SENT, FAILED, PROCESSING, DEAD
     @Column(name = "retry_count", nullable = false)

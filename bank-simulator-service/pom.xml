@@ -137,6 +137,32 @@
 			<artifactId>spring-kafka-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- ═══════════════════════════════════════════════════════ -->
+		<!-- Conductor Dependencies - Workflow Orchestration        -->
+		<!-- ═══════════════════════════════════════════════════════ -->
+
+		<!-- Conductor Client - Core SDK -->
+		<dependency>
+			<groupId>com.netflix.conductor</groupId>
+			<artifactId>conductor-client</artifactId>
+			<version>3.15.0</version>
+		</dependency>
+
+		<!-- Conductor Client Spring - Spring Boot Integration -->
+		<dependency>
+			<groupId>com.netflix.conductor</groupId>
+			<artifactId>conductor-client-spring</artifactId>
+			<version>3.15.0</version>
+		</dependency>
+
+		<!-- Conductor Common - Common models and utilities -->
+		<dependency>
+			<groupId>com.netflix.conductor</groupId>
+			<artifactId>conductor-common</artifactId>
+			<version>3.15.0</version>
+		</dependency>
+
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>

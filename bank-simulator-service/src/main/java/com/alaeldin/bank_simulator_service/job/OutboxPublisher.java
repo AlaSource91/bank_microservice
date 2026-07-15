@@ -79,7 +79,9 @@ public class OutboxPublisher {
         try {
             kafkaTemplate.send(topic, event.getAggregateId(), payload)
                     .orTimeout(publishTimeoutSeconds, TimeUnit.SECONDS)
-                    .whenComplete((result, ex) -> handleResult(event, topic, result, ex));
+                    .whenComplete((result, ex)
+                            -> handleResult(event, topic, result, ex));
+
         } catch (Exception ex) {
             log.error("Failed to enqueue event id={}: {}", event.getId(), ex.getMessage(), ex);
             outboxService.markEventAsFailed(event.getId(), ex.getMessage());

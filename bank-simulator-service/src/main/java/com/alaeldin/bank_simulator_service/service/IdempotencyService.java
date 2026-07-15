@@ -194,7 +194,8 @@ public class IdempotencyService
         log.debug("Recording success for idempotency key: {} with transaction: {}",
                 maskKey(key), txn.getReferenceId());
 
-        Optional<TransactionIdempotency> recordOpt = transactionIdempotencyRepository.findByIdempotencyKey(key);
+        Optional<TransactionIdempotency> recordOpt = transactionIdempotencyRepository
+                .findByIdempotencyKey(key);
 
         if (recordOpt.isEmpty()) {
             log.error("Idempotency record not found for key: {}. This should not happen if recordStart() was called before processing.",

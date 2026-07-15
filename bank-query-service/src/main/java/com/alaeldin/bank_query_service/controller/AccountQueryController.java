@@ -21,7 +21,7 @@ import java.math.BigDecimal;
  * All responses are cached for improved performance.
  */
 @RestController
-@RequestMapping("/api/v1/query/accounts")
+@RequestMapping({"/api/v1/query/accounts", "/api/v1/accounts"})
 @Slf4j
 @RequiredArgsConstructor
 @Validated

@@ -1,0 +1,103 @@
+{
+  "name": "p2p_transfer_workflow",
+  "description": "P2P money transfer workflow with saga pattern",
+  "version": 1,
+  "tasks": [
+    {
+      "name": "validate_source_account",
+      "taskReferenceName": "validate_source_ref",
+      "inputParameters": {
+        "accountId": "${workflow.input.sourceAccountId}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "validate_destination_account",
+      "taskReferenceName": "validate_destination_ref",
+      "inputParameters": {
+        "accountId": "${workflow.input.destinationAccountId}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "check_balance",
+      "taskReferenceName": "check_balance_ref",
+      "inputParameters": {
+        "accountId": "${workflow.input.sourceAccountId}",
+        "requiredAmount": "${workflow.input.amount}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "debit_source_account",
+      "taskReferenceName": "debit_source_ref",
+      "inputParameters": {
+        "accountId": "${workflow.input.sourceAccountId}",
+        "amount": "${workflow.input.amount}",
+        "currency": "${workflow.input.currency}",
+        "workflowId": "${workflow.workflowId}",
+        "taskId": "${CPEWAIT_task_ref_name}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "credit_destination_account",
+      "taskReferenceName": "credit_destination_ref",
+      "inputParameters": {
+        "accountId": "${workflow.input.destinationAccountId}",
+        "amount": "${workflow.input.amount}",
+        "currency": "${workflow.input.currency}",
+        "workflowId": "${workflow.workflowId}",
+        "taskId": "${CPEWAIT_task_ref_name}",
+        "debitTransactionId": "${debit_source_ref.output.transactionId}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "publish_transfer_completed_event",
+      "taskReferenceName": "publish_event_ref",
+      "inputParameters": {
+        "sourceAccountId": "${workflow.input.sourceAccountId}",
+        "destinationAccountId": "${workflow.input.destinationAccountId}",
+        "amount": "${workflow.input.amount}",
+        "debitTransactionId": "${debit_source_ref.output.transactionId}",
+        "creditTransactionId": "${credit_destination_ref.output.transactionId}",
+        "status": "COMPLETED"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": true
+    }
+  ],
+  "inputParameters": [
+    "sourceAccountId",
+    "destinationAccountId",
+    "amount",
+    "currency"
+  ],
+  "outputParameters": {
+    "transferStatus": "COMPLETED",
+    "debitTransactionId": "${debit_source_ref.output.transactionId}",
+    "creditTransactionId": "${credit_destination_ref.output.transactionId}",
+    "sourceBalance": "${debit_source_ref.output.newBalance}",
+    "destinationBalance": "${credit_destination_ref.output.newBalance}"
+  },
+  "failureWorkflow": "p2p_transfer_compensation_workflow",
+  "schemaVersion": 2,
+  "restartable": true,
+  "workflowStatusListenerEnabled": true,
+  "ownerEmail": "admin@p2p-bank.com",
+  "timeoutPolicy": "ALERT_ONLY",
+  "timeoutSeconds": 300
+}
+

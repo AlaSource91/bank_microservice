@@ -118,11 +118,17 @@ public class TransactionQueryService {
     ) {
         validatePageable(pageable);
 
-        LocalDateTime startDate = request.getStartDate();
-        LocalDateTime endDate = request.getEndDate();
+        java.time.LocalDate startDateLocal = request.getStartDate();
+        java.time.LocalDate endDateLocal = request.getEndDate();
 
         // If both dates are provided, validate the range and apply date filter
-        if (startDate != null && endDate != null) {
+        if (startDateLocal != null && endDateLocal != null) {
+            // Convert LocalDate to LocalDateTime
+            // Start date: beginning of day (00:00:00)
+            // End date: end of day (23:59:59.999999999)
+            LocalDateTime startDate = startDateLocal.atStartOfDay();
+            LocalDateTime endDate = endDateLocal.atTime(23, 59, 59, 999999999);
+
             validateDateRange(startDate, endDate);
 
             log.info("Searching transactions by date range - startDate: {}, endDate: {}, page: {}",
@@ -138,8 +144,8 @@ public class TransactionQueryService {
         }
 
         // If only one boundary is provided, reject the request
-        if (startDate != null || endDate != null) {
-            log.warn("Partial date range provided - startDate: {}, endDate: {}", startDate, endDate);
+        if (startDateLocal != null || endDateLocal != null) {
+            log.warn("Partial date range provided - startDate: {}, endDate: {}", startDateLocal, endDateLocal);
             throw new IllegalArgumentException("Both startDate and endDate must be provided together, or neither");
         }
 

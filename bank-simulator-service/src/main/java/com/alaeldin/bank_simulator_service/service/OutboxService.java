@@ -105,7 +105,8 @@ public class OutboxService {
             LocalDateTime publishedAt = LocalDateTime.now();
 
             // Try atomic update first (more efficient for concurrent scenarios)
-            boolean updated = atomicStatusUpdate(eventId, OutBoxStatus.PROCESSING, OutBoxStatus.SENT, publishedAt);
+            boolean updated = atomicStatusUpdate(eventId
+                    , OutBoxStatus.PROCESSING, OutBoxStatus.SENT, publishedAt);
 
             if (!updated) {
                 // Fallback to manual update if not in PROCESSING status
@@ -223,7 +224,8 @@ public class OutboxService {
      */
     public List<OutboxEvent> findAndRecoverStaleEvents(int staleThresholdMinutes) {
         LocalDateTime staleThreshold = LocalDateTime.now().minusMinutes(staleThresholdMinutes);
-        List<OutboxEvent> staleEvents = outboxEventRepository.findStaleProcessingEvents(staleThreshold);
+        List<OutboxEvent> staleEvents = outboxEventRepository
+                .findStaleProcessingEvents(staleThreshold);
 
         if (!staleEvents.isEmpty()) {
             log.warn(" Found {} stale PROCESSING events older than {} minutes",
@@ -308,7 +310,8 @@ public class OutboxService {
     public boolean atomicStatusUpdate(Long eventId, OutBoxStatus currentStatus,
                                     OutBoxStatus newStatus, LocalDateTime publishedAt) {
         try {
-            int updated = outboxEventRepository.updateEventStatus(eventId, currentStatus, newStatus, publishedAt);
+            int updated = outboxEventRepository.updateEventStatus(eventId, currentStatus
+                    , newStatus, publishedAt);
 
             if (updated > 0) {
                 log.debug(" Atomically updated event {} from {} to {}", eventId, currentStatus, newStatus);
@@ -323,6 +326,7 @@ public class OutboxService {
             return false;
         }
     }
+
 
     /**
      * Get outbox statistics for monitoring

@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: eureka-server
+
+server:
+  port: 8761
+
+eureka:
+  instance:
+    hostname: localhost
+    prefer-ip-address: false
+    lease-renewal-interval-in-seconds: 10      # Heartbeat interval
+    lease-expiration-duration-in-seconds: 30   # Time before instance is removed
+    
+  client:
+    register-with-eureka: false                 # Don't register itself
+    fetch-registry: false                       # Don't fetch registry
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+  server:
+    enable-self-preservation: true              # Prevent mass deregistration in dev
+    eviction-interval-timer-in-ms: 10000        # Check for expired instances every 10s
+    renewal-percent-threshold: 0.85             # Self-preservation threshold
+    response-cache-update-interval-ms: 30000    # Update response cache every 30s
+    response-cache-auto-expiration-in-seconds: 180  # Clear cache after 3 min
+
+# Management endpoints for health checks and monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env
+  endpoint:
+    health:
+      show-details: always
+  health:
+    defaults:
+      enabled: true
+
+logging:
+  level:
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    root: INFO
+
+

@@ -21,10 +21,10 @@ import java.time.LocalDateTime;
 public class BankAccountEvent
 {
 
-    private String eventId;
     private String accountNumber;
     private String accountHolderName;
     private AccountType accountType;
+    private String eventId;
     private String eventType;
     private BigDecimal balance;
     private AccountStatus status;

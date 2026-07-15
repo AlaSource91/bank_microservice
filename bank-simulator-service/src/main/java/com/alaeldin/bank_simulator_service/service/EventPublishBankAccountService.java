@@ -24,6 +24,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EventPublishBankAccountService {
 
+
     // Dependencies
     private final OutboxService outboxService;
 
@@ -63,7 +64,7 @@ public class EventPublishBankAccountService {
                     accountNumber, accountEventType, savedEvent.getId());
         } catch (Exception e) {
             log.error("Failed to save account event to outbox: accountNumber={}, eventType={}, error={}",
-                    accountNumber, accountEventType, e.getMessage(), e);
+                  accountNumber, accountEventType, e.getMessage(), e);
             throw new RuntimeException("Failed to save account event to outbox", e);
         }
     }
@@ -120,6 +121,7 @@ public class EventPublishBankAccountService {
                 .idempotencyKey(generateIdempotencyKey(bankAccount.getAccountNumber(), accountEventType, bankAccount))
                 .build();
     }
+
     /**
      * Generates an idempotency key for the event.
      * This ensures that duplicate events with the same account number and type won't be processed twice.

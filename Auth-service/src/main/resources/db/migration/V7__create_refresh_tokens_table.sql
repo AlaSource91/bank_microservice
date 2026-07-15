@@ -1,0 +1,13 @@
+CREATE TABLE refresh_tokens(
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    token_hash VARCHAR(255) NOT NULL,
+    user_id BIGINT NOT NULL,
+    expiry_date DATETIME NOT NULL,
+    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_refresh_tokens_token UNIQUE (token_hash),
+    CONSTRAINT fk_refresh_tokens_user  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -74,10 +74,21 @@ spring:
 server:
   port: 8081
 
-# Eureka Configuration - Disabled for Docker
+# Eureka Configuration - Enabled for Docker with Service Discovery
 eureka:
   client:
-    enabled: false
+    enabled: true
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+  instance:
+    prefer-ip-address: false
+    hostname: bank-simulator-service
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
 
 # Application-specific Configuration - Docker
 app:

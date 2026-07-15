@@ -1,0 +1,170 @@
+spring:
+  application:
+    name: account-service
+    version: 1.0
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/account_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: bank_user
+    password: bank_password123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.MySQLDialect
+    show-sql: true
+    defer-datasource-initialization: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    password: ""
+    database: 0
+    jedis:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+
+  # Flyway Configuration
+  flyway:
+    enabled: true  # Re-enable to allow custom FlywayConfiguration to work
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # Kafka Configuration - Enhanced with timeout settings
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all                    # Wait for all replicas to acknowledge
+      retries: 3                   # Retry failed sends
+      batch-size: 16384           # Batch size for better throughput
+      linger-ms: 5                # Wait 5ms for batching
+      buffer-memory: 33554432     # 32MB buffer
+      properties:
+        enable.idempotence: true   # Prevent duplicate messages
+        max.in.flight.requests.per.connection: 5
+        request.timeout.ms: 30000      # 30 seconds timeout
+        delivery.timeout.ms: 120000    # 2 minutes total timeout
+        max.block.ms: 10000            # 10 seconds max block on send
+        connections.max.idle.ms: 600000 # 10 minutes connection idle
+        reconnect.backoff.ms: 50       # Fast reconnect
+        retry.backoff.ms: 100          # Retry backoff
+    consumer:
+      group-id: bank-simulator-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        isolation.level: read_committed
+
+  # Task Scheduling Configuration for @EnableScheduling
+  task:
+    scheduling:
+      enabled: true
+      pool:
+        size: 2              # Thread pool for scheduled tasks
+
+server:
+  port: 7071              # Account Service port (updated from 8081)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Observability Configuration (Actuator, Prometheus, Zipkin)
+# ═══════════════════════════════════════════════════════════════════════
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers  # Exposed endpoints
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0    # Sample 100% traces (reduce in production to 0.1)
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+
+# Eureka Configuration - Enabled for service discovery
+eureka:
+  client:
+    enabled: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 10      # Heartbeat every 10 seconds
+    lease-expiration-duration-in-seconds: 30   # Remove if no heartbeat for 30 seconds
+
+# Application-specific Configuration
+app:
+  kafka:
+    topic:
+      account-events:       bank.account.events       # BANK_ACCOUNT aggregate
+
+
+  outbox:
+    batch-size: 20              # Events to process per batch
+    max-retries: 3              # Max retry attempts per event
+    cleanup-days: 7             # Delete old events after X days
+    stale-threshold: 30         # Minutes before PROCESSING events are considered stale
+    publish-timeout-seconds: 30 # Timeout for Kafka publishing operations
+    poll-interval-ms: 10000     # Interval between outbox polling cycles (ms)
+
+# Cache Configuration
+cache:
+  ttl:
+    account-balance: 300        # 5 minutes
+    transaction: 600            # 10 minutes
+    account-info: 900            #15 minutes
+  idempotency:
+    ttl: 86400 #24 hours in seconds
+    max-entries: 1000000
+    eviction-policy: LRU
+    Key-pattern: "idempotency:*"
+task:
+  scheduling:
+    enabled: true
+    pool:
+      size: 2              # Thread pool for scheduled tasks
+# Distributed Locking Configuration
+lock:
+  timeout-minutes: 5           # Lock expiration timeout in minutes
+  cleanup-interval-ms: 120000   # Cleanup scheduler interval (2 minutes)
+  cleanup-initial-delay-ms: 60000  # Initial delay before first cleanup (1 minute)
+
+logging:
+  level:
+    org.flywaydb: DEBUG
+    org.flywaydb.core.internal.database.mysql: DEBUG
+    org.flywaydb.core.internal.command.DbMigrate: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    # Logging configuration for monitoring Strategy 5
+    com.alaeldin.bank_simulator_service.service.EventPublishingService: INFO
+    org.springframework.kafka: WARN
+    org.springframework.cache: DEBUG
+

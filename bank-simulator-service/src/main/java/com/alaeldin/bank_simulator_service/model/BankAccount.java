@@ -78,6 +78,8 @@ public class BankAccount {
     @Column(name = "locked_by", length = 100)
     private String lockedBy;
 
+    @Column(name = "user_id" )
+    private Long userId;
     /**
      * Timestamp when the lock was acquired.
      * Locks expire after 5 minutes (configurable).

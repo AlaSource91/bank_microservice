@@ -2,6 +2,7 @@ package com.alaeldin.bank_simulator_service.service;
 
 
 
+import com.alaeldin.bank_simulator_service.component.CurrentUserUtil;
 import com.alaeldin.bank_simulator_service.constant.AccountEventType;
 import com.alaeldin.bank_simulator_service.util.AccountNumberUtil;
 import com.alaeldin.bank_simulator_service.constant.AccountStatus;
@@ -13,6 +14,7 @@ import com.alaeldin.bank_simulator_service.exception.ResourceNotFoundException;
 import com.alaeldin.bank_simulator_service.mapper.BankAccountMapper;
 import com.alaeldin.bank_simulator_service.model.BankAccount;
 import com.alaeldin.bank_simulator_service.repository.BankAccountRepository;
+import com.alaeldin.bank_simulator_service.util.GatewayHeaders;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -22,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.file.AccessDeniedException;
 import java.time.LocalDateTime;
 
 /**
@@ -50,6 +53,7 @@ public class BankAccountService {
     private final BankAccountRepository bankAccountRepository;
     private final BankAccountMapper bankAccountMapper;
     private final EventPublishBankAccountService eventPublishBankAccountService;
+    private final CurrentUserUtil currentUserUtil;
 
     /**
      * Constructor for dependency injection.
@@ -59,10 +63,13 @@ public class BankAccountService {
      * @param bankAccountMapper     the mapper for DTO conversions
      */
     public BankAccountService(BankAccountRepository bankAccountRepository
-            , BankAccountMapper bankAccountMapper, EventPublishBankAccountService eventPublishBankAccountService) {
+            , BankAccountMapper bankAccountMapper
+            , EventPublishBankAccountService eventPublishBankAccountService
+            , CurrentUserUtil currentUserUtil) {
         this.bankAccountRepository = bankAccountRepository;
         this.bankAccountMapper = bankAccountMapper;
         this.eventPublishBankAccountService = eventPublishBankAccountService;
+        this.currentUserUtil = currentUserUtil;
     }
 
     /**
@@ -86,11 +93,19 @@ public class BankAccountService {
      * @throws IllegalArgumentException if bankAccountRequest is null
      * @throws AccountHolderNameAlreadyExist if an account with the same holder name already exists
      */
-    public BankAccountResponse createBankAccount(BankAccountRequest bankAccountRequest) {
+    public BankAccountResponse createBankAccount(BankAccountRequest bankAccountRequest) throws AccessDeniedException {
         // Validate input
         if (bankAccountRequest == null) {
             log.error("Failed to create bank account: bankAccountRequest is null");
             throw new IllegalArgumentException("Bank account request cannot be null");
+        }
+
+        // Authorization check: Only regular users can create bank accounts
+        String currentRole = currentUserUtil.getRole();
+        if (!"USER".equals(currentRole)) {
+            log.warn("Access denied: User with role {} attempted to create a bank account. Only USER role is allowed.", 
+                    currentRole);
+            throw new AccessDeniedException("Access denied: Only users with USER role can create bank accounts");
         }
 
         String accountHolderName = bankAccountRequest.getAccountHolderName();
@@ -118,7 +133,7 @@ public class BankAccountService {
         LocalDateTime now = LocalDateTime.now();
         bankAccount.setCreatedAt(now);
         bankAccount.setUpdatedAt(now);
-
+        bankAccount.setUserId(currentUserUtil.getUserId());
         // Save account to database
         BankAccount savedAccount = bankAccountRepository.save(bankAccount);
         log.debug("Account persisted to database with ID: {}", savedAccount.getId());
@@ -474,7 +489,7 @@ public class BankAccountService {
      * @throws IllegalArgumentException if id is null/non-positive or bankAccountRequest is null
      * @throws ResourceNotFoundException if no account is found with the specified ID
      */
-    public BankAccountResponse updateAccount(Long id, BankAccountRequest bankAccountRequest) {
+    public BankAccountResponse updateAccount(Long id, BankAccountRequest bankAccountRequest) throws AccessDeniedException {
         // Validate input ID
         if (id == null) {
             log.error("Failed to update account: id is null");
@@ -501,6 +516,16 @@ public class BankAccountService {
                     return new ResourceNotFoundException("BankAccount", "id", id);
                 });
 
+        // Authorization check: Users can only update their own accounts, admins can update any account
+        String currentRole = currentUserUtil.getRole();
+        Long currentUserId = currentUserUtil.getUserId();
+        
+        if ("USER".equals(currentRole) && !currentUserId.equals(bankAccount.getUserId())) {
+            log.warn("Access denied: User {} attempted to update account {} owned by user {}", 
+                    currentUserId, id, bankAccount.getUserId());
+            throw new AccessDeniedException("Access denied: You can only update your own account");
+        }
+
         log.debug("Account found with ID: {} - Current holder: {}", id, bankAccount.getAccountHolderName());
 
         // Store old values for audit logging
@@ -512,6 +537,7 @@ public class BankAccountService {
         bankAccount.setAccountHolderName(bankAccountRequest.getAccountHolderName());
         bankAccount.setAccountType(bankAccountRequest.getAccountType());
         bankAccount.setAccountStatus(status);
+        bankAccount.setUserId(currentUserUtil.getUserId());
         bankAccount.setUpdatedAt(LocalDateTime.now());
 
         log.debug("Account fields updated - Old holder: {}, New holder: {}, Old type: {}, New type: {}",
@@ -643,7 +669,15 @@ public class BankAccountService {
      * @throws ResourceNotFoundException if no account is found with the specified account number
      * @throws IllegalStateException if the account is already frozen
      */
-    public void freezeAccount(String accountNumber) {
+    public void freezeAccount(String accountNumber) throws AccessDeniedException {
+
+        if(!currentUserUtil.isAdmin())
+        {
+                log.warn("Access denied:Admin only  attempted to Freeze account  by Account Number {}"
+                      , accountNumber);
+                throw new AccessDeniedException("Access denied: You can only update your own account");
+
+        }
         validateAccount(accountNumber);
 
         log.info("Attempting to freeze account with account number: {}", accountNumber);

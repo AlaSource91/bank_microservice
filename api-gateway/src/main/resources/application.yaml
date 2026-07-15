@@ -1,0 +1,376 @@
+# ═══════════════════════════════════════════════════════════════════════
+# API Gateway Configuration
+# ═══════════════════════════════════════════════════════════════════════
+# Microservice: API Gateway (Entry point for all client requests)
+# Version: 3.0
+# Features:
+#   - JWT Authentication with Role-based Access Control
+#   - Token Bucket Rate Limiting with Redis
+#   - Circuit Breaker Pattern (Fault Tolerance)
+#   - Service Discovery via Eureka
+#   - CORS Configuration
+#   - Distributed Tracing Ready
+# ───────────────────────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server Configuration
+# ═══════════════════════════════════════════════════════════════════════
+server:
+  port: 8089                    # Gateway port (external facing)
+  shutdown: graceful            # Graceful shutdown on termination
+
+# ═══════════════════════════════════════════════════════════════════════
+# Spring Application Configuration
+# ═══════════════════════════════════════════════════════════════════════
+spring:
+  application:
+    name: api-gateway           # Service name (registered in Eureka)
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Spring Cloud Gateway Configuration
+  # ═══════════════════════════════════════════════════════════════════════
+  cloud:
+    gateway:
+      # ─────────────────────────────────────────────────────────────────
+      # Global CORS Configuration
+      # ─────────────────────────────────────────────────────────────────
+      # Allows cross-origin requests from frontend applications
+      # Security: Restrict origins in production
+      # ─────────────────────────────────────────────────────────────────
+      globalcors:
+        cors-configurations:
+          '[/**]':                              # Apply to all routes
+            allowed-origins:
+              - "http://localhost:4200"        # Angular dev server
+              - "http://localhost:3000"        # React dev server
+              # - "https://yourdomain.com"     # Production frontend (uncomment)
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowed-headers:
+              - "*"                            # Allow all headers (restrict in production)
+            allow-credentials: true            # Allow cookies/auth headers
+            max-age: 3600                      # Preflight cache duration (1 hour)
+
+      # Routes Configuration
+      # ──────────────────────────────────────────────────────────────────────
+      # Rate Limiting: Using CustomRateLimitFilter with Token Bucket algorithm
+      # - refillRate: Tokens added per second (sustained rate)
+      # - burstCapacity: Maximum tokens bucket can hold (allows bursts)
+      # - requestedTokens: Tokens consumed per request (default: 1)
+      # - ttl: Redis key expiration in seconds (default: 60)
+      # ──────────────────────────────────────────────────────────────────────
+      routes:
+        # ═════════════════════════════════════════════════════════════════════
+        # Auth Service Routes (Public - No JWT Required)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Authentication endpoints (login, register, refresh token)
+        # Rate Limit: Moderate (prevent brute force attacks)
+        # Key Resolution: IP-based (unauthenticated users)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: auth-service
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: authServiceCircuitBreaker
+                fallbackUri: forward:/fallback/auth
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 5              # 5 req/sec sustained (300/min)
+                burstCapacity: 15          # Allow 15 req burst (prevent brute force)
+                requestedTokens: 1         # Standard cost
+                ttl: 300                   # 5 min window (longer for security)
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Bank Accounts Routes (Protected - JWT Required)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Account management (view, create, update balance)
+        # Rate Limit: Standard (normal user operations)
+        # Key Resolution: User-based (from JWT token)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: account-service
+          uri: lb://ACCOUNT-SERVICE
+          predicates:
+            - Path=/api/v1/accounts/**
+          filters:
+            - JwtAuthentication
+            - name: CircuitBreaker
+              args:
+                name: accountCircuitBreaker
+                fallbackUri: forward:/fallback/account
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 10             # 10 req/sec sustained (600/min)
+                burstCapacity: 20          # Allow 20 req burst
+                requestedTokens: 1         # Standard cost
+                ttl: 60                    # 1 min window
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Bank Transfer Routes (Protected - JWT Required)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Money transfer operations (critical operations)
+        # Rate Limit: Higher (but still controlled)
+        # Key Resolution: User-based (from JWT token)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: bank-simulator-transfer
+          uri: lb://BANK-SIMULATOR-SERVICE
+          predicates:
+            - Path=/api/v1/transfer,/api/v1/transfer/**
+          filters:
+            - JwtAuthentication
+            - name: CircuitBreaker
+              args:
+                name: bankSimulatorCircuitBreaker
+                fallbackUri: forward:/fallback/simulator
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 5              # 5 req/sec sustained (slower for transfers)
+                burstCapacity: 10          # Small burst (critical operation)
+                requestedTokens: 2         # Higher cost (expensive operation)
+                ttl: 60                    # 1 min window
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Bank A & B Routes (Protected - JWT Required)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Bank-specific operations
+        # Rate Limit: Standard to high
+        # Key Resolution: User-based (from JWT token)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: bank-simulator-banks
+          uri: lb://BANK-SIMULATOR-SERVICE
+          predicates:
+            - Path=/api/v1/bank-a/**,/api/v1/bank-b/**
+          filters:
+            - JwtAuthentication
+            - name: CircuitBreaker
+              args:
+                name: bankSimulatorCircuitBreaker
+                fallbackUri: forward:/fallback/simulator
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 15             # 15 req/sec sustained
+                burstCapacity: 30          # Allow 30 req burst
+                requestedTokens: 1         # Standard cost
+                ttl: 60                    # 1 min window
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Bank Query Service Routes (Protected - JWT Required)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Query/read operations (transaction history, reports)
+        # Rate Limit: Higher (read-only operations)
+        # Key Resolution: User-based (from JWT token)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: bank-query-service
+          uri: lb://BANK-QUERY-SERVICE
+          predicates:
+            - Path=/api/v1/query/**
+          filters:
+            - JwtAuthentication
+            - name: CircuitBreaker
+              args:
+                name: bankQueryCircuitBreaker
+                fallbackUri: forward:/fallback/query
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 20             # 20 req/sec sustained (read operations)
+                burstCapacity: 50          # Higher burst (queries can spike)
+                requestedTokens: 1         # Standard cost
+                ttl: 60                    # 1 min window
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Admin Routes (Protected - JWT Required + ADMIN Role)
+        # ═════════════════════════════════════════════════════════════════════
+        # Purpose: Administrative operations (user management, system config)
+        # Rate Limit: Very strict (sensitive operations)
+        # Key Resolution: User-based (from JWT token)
+        # ─────────────────────────────────────────────────────────────────────
+        - id: admin-service
+          uri: lb://ADMIN-SERVICE
+          predicates:
+            - Path=/api/v1/admin/**
+          filters:
+            - JwtAuthentication
+            - name: CircuitBreaker
+              args:
+                name: adminCircuitBreaker
+                fallbackUri: forward:/fallback/admin
+            - name: CustomRateLimitFilter
+              args:
+                refillRate: 2              # 2 req/sec sustained (very strict)
+                burstCapacity: 5           # Small burst (admin operations)
+                requestedTokens: 1         # Standard cost
+                ttl: 120                   # 2 min window (longer for admin)
+
+      # ═══════════════════════════════════════════════════════════════════════
+      # Default Filters (Applied to All Routes)
+      # ═══════════════════════════════════════════════════════════════════════
+      # These filters are automatically applied to every route
+      # ───────────────────────────────────────────────────────────────────────
+      default-filters:
+        - name: Retry
+          args:
+            retries: 3                                  # Maximum retry attempts
+            statuses:                                   # Retry on these HTTP statuses
+              - BAD_GATEWAY                             # 502
+              - SERVICE_UNAVAILABLE                     # 503
+            methods:                                    # Only retry safe methods
+              - GET
+            backoff:                                    # Exponential backoff strategy
+              firstBackoff: 100ms                       # First retry after 100ms
+              maxBackoff: 500ms                         # Max backoff time
+              factor: 2                                 # Exponential factor (100ms, 200ms, 400ms)
+              basedOnPreviousValue: false               # Reset between requests
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Redis Configuration (Required for Token Bucket Rate Limiting)
+  # ═══════════════════════════════════════════════════════════════════════
+  # Redis stores rate limit state (tokens, timestamps) for distributed limiting
+  # All gateway instances share the same Redis for consistent rate limiting
+  # ───────────────────────────────────────────────────────────────────────
+  data:
+    redis:
+      host: localhost              # Redis server hostname (use service name in Docker)
+      port: 6379                   # Default Redis port
+      timeout: 2000ms              # Connection timeout
+      lettuce:                     # Reactive Redis client
+        pool:
+          max-active: 8            # Maximum active connections
+          max-idle: 8              # Maximum idle connections
+          min-idle: 2              # Minimum idle connections (always ready)
+          max-wait: 2000ms         # Max wait time for connection from pool
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Lifecycle Configuration
+  # ═══════════════════════════════════════════════════════════════════════
+  lifecycle:
+    timeout-per-shutdown-phase: 30s   # Graceful shutdown timeout
+
+# ═══════════════════════════════════════════════════════════════════════
+# JWT Configuration (Custom Application Settings)
+# ═══════════════════════════════════════════════════════════════════════
+# Used by JwtAuthenticationFilter to validate JWT tokens
+# IMPORTANT: Must match the secret used by Auth Service
+# ───────────────────────────────────────────────────────────────────────
+app:
+  jwt:
+    # JWT Secret Key - 64 bytes (512 bits) required for HS512 algorithm
+    # SECURITY: In production, use environment variable or secret manager
+    secret: "B0Iq9tTJB9U6Tuyq+WDin5oTzEqbU6KEMpHz8xj7qk8myY6iWlBJ7Y91EJSCQDLctXk/zz8apiRqm9YJztOd1w=="
+    access-token-expiration-ms: 3600000  # 1 hour (in milliseconds)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Resilience4j Circuit Breaker Configuration
+# ═══════════════════════════════════════════════════════════════════════
+# Provides fault tolerance and resilience patterns
+# - Circuit Breaker: Prevents cascading failures
+# - Time Limiter: Timeout management for operations
+# ───────────────────────────────────────────────────────────────────────
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true                              # Expose health endpoint
+        slidingWindowSize: 10                                      # Window size for failure rate
+        minimumNumberOfCalls: 5                                    # Min calls before calculating failure rate
+        permittedNumberOfCallsInHalfOpenState: 3                  # Test calls in half-open state
+        automaticTransitionFromOpenToHalfOpenEnabled: true        # Auto recovery attempt
+        waitDurationInOpenState: 10s                              # Wait before trying half-open
+        failureRateThreshold: 50                                  # 50% failure rate opens circuit
+        eventConsumerBufferSize: 10                               # Event buffer size
+        recordExceptions:                                         # Exceptions that count as failures
+          - org.springframework.web.client.HttpServerErrorException
+          - java.util.concurrent.TimeoutException
+          - java.io.IOException
+
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 15s  # Timeout for operations (increased for saga-based operations)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Spring Boot Actuator Configuration
+# ═══════════════════════════════════════════════════════════════════════
+# Provides monitoring and management endpoints
+# Access at: http://localhost:8089/actuator
+# ───────────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway,httptrace  # Exposed endpoints
+  endpoint:
+    health:
+      show-details: always                               # Show detailed health info
+    gateway:
+      enabled: true                                      # Gateway-specific endpoints
+  health:
+    circuitbreakers:
+      enabled: true                                      # Circuit breaker health indicator
+  metrics:
+    export:
+      prometheus:
+        enabled: true                                    # Enable Prometheus metrics export
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true                       # Histogram for request duration
+  tracing:
+    sampling:
+      probability: 1.0                                   # Sample 100% of traces (reduce in production)
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans      # Zipkin endpoint
+
+# ═══════════════════════════════════════════════════════════════════════
+# Logging Configuration
+# ═══════════════════════════════════════════════════════════════════════
+# Log Levels: OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL
+# ───────────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO                                           # Root logger level
+    com.alaeldin.gateway: DEBUG                          # Gateway package (detailed logs)
+    org.springframework.cloud.gateway: DEBUG             # Spring Cloud Gateway logs
+    io.github.resilience4j: DEBUG                        # Resilience4j logs
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"         # Console log pattern
+
+# ═══════════════════════════════════════════════════════════════════════
+# Eureka Client Configuration (Service Discovery)
+# ═══════════════════════════════════════════════════════════════════════
+# Registers with Eureka Server and discovers other services
+# Eureka Server: http://localhost:8761
+# ───────────────────────────────────────────────────────────────────────
+eureka:
+  client:
+    enabled: true                                        # Enable Eureka client
+    service-url:
+      defaultZone: http://localhost:8761/eureka/        # Eureka server URL
+    register-with-eureka: true                           # Register this service
+    fetch-registry: true                                 # Fetch service registry
+    registry-fetch-interval-seconds: 30                  # Refresh interval
+  instance:
+    prefer-ip-address: false                             # Use hostname instead of IP
+    hostname: localhost                                  # Service hostname
+    instance-id: ${spring.application.name}:${server.port}  # Unique instance ID
+    lease-renewal-interval-in-seconds: 10                # Heartbeat interval
+    lease-expiration-duration-in-seconds: 30             # Eviction threshold
+
+# ═══════════════════════════════════════════════════════════════════════
+# Rate Limiting Summary (Token Bucket Algorithm)
+# ═══════════════════════════════════════════════════════════════════════
+# Route                 | Refill Rate | Burst Cap | Token Cost | Notes
+# ─────────────────────────────────────────────────────────────────────
+# Auth Service          | 5/sec       | 15        | 1          | Brute force protection
+# Account Service       | 10/sec      | 20        | 1          | Standard operations
+# Transfer Service      | 5/sec       | 10        | 2          | Critical operations
+# Bank A/B Service      | 15/sec      | 30        | 1          | Higher throughput
+# Query Service         | 20/sec      | 50        | 1          | Read operations
+# Admin Service         | 2/sec       | 5         | 1          | Very strict
+# ═══════════════════════════════════════════════════════════════════════

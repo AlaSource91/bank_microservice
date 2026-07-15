@@ -1,4 +1,4 @@
--- V1__create_bank_accounts.sql
+-- V1__create_accounts.sql
 -- Create bank_account table for storing account information
 
 CREATE TABLE IF NOT EXISTS bank_account (

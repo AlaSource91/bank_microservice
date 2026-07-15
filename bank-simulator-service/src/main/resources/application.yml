@@ -76,7 +76,7 @@ spring:
         size: 2              # Thread pool for scheduled tasks
 
 server:
-  port: 5051                # Changed from 5051 to match docker-compose
+  port: 8081                # Matches API Gateway and docker-compose configuration
 
 # Eureka Configuration - Disabled for standalone development
 eureka:

@@ -1,0 +1,85 @@
+{
+  "name": "p2p_transfer_compensation_workflow",
+  "description": "Compensates failed P2P transfer by reversing debit",
+  "version": 1,
+  "tasks": [
+    {
+      "name": "check_debit_completed",
+      "taskReferenceName": "check_debit_ref",
+      "inputParameters": {
+        "workflowId": "${workflow.input.failedWorkflowId}"
+      },
+      "type": "SIMPLE",
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "compensation_decision",
+      "taskReferenceName": "decision_ref",
+      "inputParameters": {
+        "debitCompleted": "${check_debit_ref.output.debitCompleted}"
+      },
+      "type": "SWITCH",
+      "decisionCases": {
+        "true": [
+          {
+            "name": "reverse_debit",
+            "taskReferenceName": "reverse_debit_ref",
+            "inputParameters": {
+              "accountId": "${check_debit_ref.output.sourceAccountId}",
+              "amount": "${check_debit_ref.output.amount}",
+              "originalTransactionId": "${check_debit_ref.output.debitTransactionId}",
+              "reason": "TRANSFER_FAILED"
+            },
+            "type": "SIMPLE"
+          },
+          {
+            "name": "log_compensation",
+            "taskReferenceName": "log_compensation_ref",
+            "inputParameters": {
+              "action": "DEBIT_REVERSED",
+              "transactionId": "${reverse_debit_ref.output.reversalTransactionId}"
+            },
+            "type": "SIMPLE"
+          }
+        ]
+      },
+      "defaultCase": [
+        {
+          "name": "log_no_compensation_needed",
+          "taskReferenceName": "log_no_comp_ref",
+          "inputParameters": {
+            "action": "NO_COMPENSATION_NEEDED",
+            "reason": "Debit was not completed"
+          },
+          "type": "SIMPLE"
+        }
+      ],
+      "evaluatorType": "value-param",
+      "expression": "debitCompleted"
+    },
+    {
+      "name": "notify_failure",
+      "taskReferenceName": "notify_failure_ref",
+      "inputParameters": {
+        "sourceAccountId": "${check_debit_ref.output.sourceAccountId}",
+        "destinationAccountId": "${check_debit_ref.output.destinationAccountId}",
+        "status": "FAILED_AND_COMPENSATED"
+      },
+      "type": "SIMPLE",
+      "optional": true
+    }
+  ],
+  "inputParameters": [
+    "failedWorkflowId"
+  ],
+  "outputParameters": {
+    "compensationStatus": "${decision_ref.output.action}",
+    "reversalTransactionId": "${reverse_debit_ref.output.reversalTransactionId}"
+  },
+  "schemaVersion": 2,
+  "restartable": true,
+  "ownerEmail": "admin@p2p-bank.com",
+  "timeoutSeconds": 180
+}
+

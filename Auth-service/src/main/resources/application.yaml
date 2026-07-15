@@ -1,0 +1,136 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: Auth-service
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # ── MySQL DataSource (HikariCP) ─────────────────────────────────────────────
+  datasource:
+    url: jdbc:mysql://localhost:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: bank_user
+    password: bank_password123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 20000       # 20 s — fail fast rather than queuing forever
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 300000            # 5 min
+      max-lifetime: 1200000           # 20 min — less than MySQL wait_timeout (28800 s)
+      pool-name: AuthHikariPool
+
+  # ── JPA / Hibernate ─────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: none                  # Flyway manages schema — Hibernate must never touch it
+    show-sql: true                    # Disabled in docker profile
+    properties:
+      hibernate:
+        # Explicit dialect — required by Hibernate 7 (Spring Boot 4.x).
+        # Without this, Hibernate attempts a live JDBC connection at startup just to
+        # detect the dialect, and throws BeanCreationException if MySQL isn't ready yet.
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true              # Disabled in docker profile
+        default_batch_fetch_size: 20  # Prevents N+1 on collection fetches
+
+  # ── Flyway ──────────────────────────────────────────────────────────────────
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # ── Redis (Lettuce — Spring Boot default) ───────────────────────────────────
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 2                     # db0 = simulator, db1 = query, db2 = auth
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  # ── Kafka ───────────────────────────────────────────────────────────────────
+  # Note: serializer/reliability settings are set programmatically in KafkaConfig.java
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  # ── Jackson ─────────────────────────────────────────────────────────
+  # Jackson 3.x (tools.jackson) — used by Spring Boot 4.x — removed
+  # WRITE_DATES_AS_TIMESTAMPS from SerializationFeature.  All ObjectMapper
+  # customisation is done in JacksonConfig.java, which also means Spring
+  # Boot's spring.jackson.* auto-config is bypassed (it backs off whenever
+  # a custom ObjectMapper bean is present).
+
+# ── Application Properties ───────────────────────────────────────────────────
+app:
+  jwt:
+    # IMPORTANT: This MUST match the secret in api-gateway/application.yaml
+    # Generated with: 64 bytes (512 bits) - Required for HS512 algorithm
+    # To generate new: openssl rand -base64 64
+    secret: "B0Iq9tTJB9U6Tuyq+WDin5oTzEqbU6KEMpHz8xj7qk8myY6iWlBJ7Y91EJSCQDLctXk/zz8apiRqm9YJztOd1w=="
+    access-token-expiration-ms: 900000        # 15 minutes
+    refresh-token-expiration-ms: 604800000    # 7 days
+
+  kafka:
+    topics:
+      auth-events: bank.auth.events
+
+  outbox:
+    poll-interval-ms: 10000           # How often to check for PENDING events (10 s)
+    batch-size: 20                    # Max events per polling cycle
+    publish-timeout-seconds: 30       # Kafka send timeout per event
+    stale-threshold-minutes: 5        # PROCESSING events older than this are recovered
+    stale-recovery-interval-ms: 60000 # How often to run stale-event recovery (60 s)
+
+  permissions:
+    cache-ttl-seconds: 300            # 5-minute Redis cache for resolved permissions
+
+# Eureka Configuration - Enabled for service discovery
+eureka:
+  client:
+    enabled: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+  instance:
+    prefer-ip-address: false
+    hostname: localhost
+    instance-id: ${spring.application.name}:${server.port}
+    lease-renewal-interval-in-seconds: 10      # Heartbeat every 10 seconds
+    lease-expiration-duration-in-seconds: 30   # Remove if no heartbeat for 30 seconds
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers
+
+  endpoint:
+    health:
+      show-details: always
+
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.alaeldin.auth_service: DEBUG
+    org.springframework.security: INFO
+    org.flywaydb: INFO
+
+upload:
+  path: uploads/img
+  file-prefix: identityId

@@ -1,4 +1,4 @@
--- V4__insert_sample_data_accounts.sql
+-- V3__insert_sample_data_accounts.sql
 -- Insert sample bank accounts data
 -- Using INSERT IGNORE to skip duplicates if migration runs multiple times
 

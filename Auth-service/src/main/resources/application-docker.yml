@@ -1,0 +1,32 @@
+# Docker profile overrides — activated by SPRING_PROFILES_ACTIVE=docker
+# All settings here override the base application.yaml for containerised deployments.
+
+spring:
+  # Override datasource to use Docker container hostname
+  datasource:
+    url: jdbc:mysql://mysql:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+  # Disable verbose SQL logging in production
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        # Explicit dialect — same reason as application.yaml (Hibernate 7 requirement)
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+
+  # Override Redis to use Docker container hostname
+  data:
+    redis:
+      host: redis
+
+  # Override Kafka to use Docker internal listener
+  kafka:
+    bootstrap-servers: kafka:29092
+
+# Reduce log verbosity in production
+logging:
+  level:
+    com.alaeldin.auth_service: INFO
+    org.springframework.security: WARN
+    org.flywaydb: WARN

@@ -118,6 +118,7 @@ public class GlobalExceptionHandler {
                 "CONSTRAINT_VIOLATION",
                 HttpStatus.BAD_REQUEST
         );
+
         error.setDetails(violations);
 
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);

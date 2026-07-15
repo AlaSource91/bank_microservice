@@ -1,0 +1,193 @@
+[
+  {
+    "name": "validate_source_account",
+    "description": "Validates source account exists and is active",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 30,
+    "responseTimeoutSeconds": 25,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "validate_destination_account",
+    "description": "Validates destination account exists and is active",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 30,
+    "responseTimeoutSeconds": 25,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "check_balance",
+    "description": "Checks if source account has sufficient balance",
+    "retryCount": 2,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 5,
+    "timeoutSeconds": 20,
+    "responseTimeoutSeconds": 15,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "debit_source_account",
+    "description": "Debits amount from source account",
+    "retryCount": 3,
+    "retryLogic": "EXPONENTIAL_BACKOFF",
+    "retryDelaySeconds": 30,
+    "backoffScaleFactor": 2,
+    "timeoutSeconds": 60,
+    "responseTimeoutSeconds": 55,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "credit_destination_account",
+    "description": "Credits amount to destination account",
+    "retryCount": 3,
+    "retryLogic": "EXPONENTIAL_BACKOFF",
+    "retryDelaySeconds": 30,
+    "backoffScaleFactor": 2,
+    "timeoutSeconds": 60,
+    "responseTimeoutSeconds": 55,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "reverse_debit",
+    "description": "Reverses a debit transaction (compensation)",
+    "retryCount": 5,
+    "retryLogic": "EXPONENTIAL_BACKOFF",
+    "retryDelaySeconds": 60,
+    "backoffScaleFactor": 2,
+    "timeoutSeconds": 120,
+    "responseTimeoutSeconds": 110,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "aml_check",
+    "description": "Performs AML (Anti Money Laundering) check",
+    "retryCount": 2,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 15,
+    "timeoutSeconds": 45,
+    "responseTimeoutSeconds": 40,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "velocity_check",
+    "description": "Checks transaction velocity limits",
+    "retryCount": 2,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 30,
+    "responseTimeoutSeconds": 25,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "transaction_limit_check",
+    "description": "Checks transaction amount limits",
+    "retryCount": 2,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 30,
+    "responseTimeoutSeconds": 25,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "publish_transfer_completed_event",
+    "description": "Publishes transfer completed event to Kafka",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 20,
+    "timeoutSeconds": 40,
+    "responseTimeoutSeconds": 35,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "check_debit_completed",
+    "description": "Checks if debit was completed in failed workflow",
+    "retryCount": 2,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 30,
+    "responseTimeoutSeconds": 25,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "log_compensation",
+    "description": "Logs compensation action",
+    "retryCount": 1,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 5,
+    "timeoutSeconds": 15,
+    "responseTimeoutSeconds": 10,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "log_no_compensation_needed",
+    "description": "Logs that no compensation is needed",
+    "retryCount": 1,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 5,
+    "timeoutSeconds": 15,
+    "responseTimeoutSeconds": 10,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "notify_failure",
+    "description": "Notifies users about transfer failure",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 30,
+    "timeoutSeconds": 60,
+    "responseTimeoutSeconds": 55,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "validate_accounts",
+    "description": "Validates both source and destination accounts",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 10,
+    "timeoutSeconds": 40,
+    "responseTimeoutSeconds": 35,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "reject_transfer",
+    "description": "Rejects transfer due to fraud checks failure",
+    "retryCount": 1,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 5,
+    "timeoutSeconds": 20,
+    "responseTimeoutSeconds": 15,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  },
+  {
+    "name": "notify_fraud_rejection",
+    "description": "Notifies about fraud-related rejection",
+    "retryCount": 3,
+    "retryLogic": "FIXED",
+    "retryDelaySeconds": 20,
+    "timeoutSeconds": 40,
+    "responseTimeoutSeconds": 35,
+    "timeoutPolicy": "ALERT_ONLY",
+    "ownerEmail": "admin@p2p-bank.com"
+  }
+]
+

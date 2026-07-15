@@ -1,0 +1,136 @@
+{
+  "name": "p2p_transfer_with_fraud_check_workflow",
+  "description": "P2P transfer with parallel fraud detection checks",
+  "version": 1,
+  "tasks": [
+    {
+      "name": "validate_accounts",
+      "taskReferenceName": "validate_accounts_ref",
+      "inputParameters": {
+        "sourceAccountId": "${workflow.input.sourceAccountId}",
+        "destinationAccountId": "${workflow.input.destinationAccountId}"
+      },
+      "type": "SIMPLE"
+    },
+    {
+      "name": "fraud_checks_fork",
+      "taskReferenceName": "fraud_fork_ref",
+      "type": "FORK_JOIN",
+      "forkTasks": [
+        [
+          {
+            "name": "aml_check",
+            "taskReferenceName": "aml_check_ref",
+            "inputParameters": {
+              "accountId": "${workflow.input.sourceAccountId}",
+              "amount": "${workflow.input.amount}"
+            },
+            "type": "SIMPLE"
+          }
+        ],
+        [
+          {
+            "name": "velocity_check",
+            "taskReferenceName": "velocity_check_ref",
+            "inputParameters": {
+              "accountId": "${workflow.input.sourceAccountId}",
+              "timeWindow": "24h"
+            },
+            "type": "SIMPLE"
+          }
+        ],
+        [
+          {
+            "name": "transaction_limit_check",
+            "taskReferenceName": "limit_check_ref",
+            "inputParameters": {
+              "accountId": "${workflow.input.sourceAccountId}",
+              "amount": "${workflow.input.amount}"
+            },
+            "type": "SIMPLE"
+          }
+        ]
+      ],
+      "startDelay": 0,
+      "optional": false
+    },
+    {
+      "name": "fraud_checks_join",
+      "taskReferenceName": "fraud_join_ref",
+      "type": "JOIN",
+      "joinOn": [
+        "aml_check_ref",
+        "velocity_check_ref",
+        "limit_check_ref"
+      ]
+    },
+    {
+      "name": "evaluate_fraud_results",
+      "taskReferenceName": "fraud_evaluation_ref",
+      "type": "SWITCH",
+      "evaluatorType": "javascript",
+      "expression": "(function() { var aml = '${aml_check_ref.output.passed}' === 'true'; var velocity = '${velocity_check_ref.output.passed}' === 'true'; var limit = '${limit_check_ref.output.passed}' === 'true'; return (aml && velocity && limit) ? 'APPROVED' : 'REJECTED'; })();",
+      "decisionCases": {
+        "APPROVED": [
+          {
+            "name": "execute_p2p_transfer",
+            "taskReferenceName": "execute_transfer_ref",
+            "type": "SUB_WORKFLOW",
+            "subWorkflowParam": {
+              "name": "p2p_transfer_workflow",
+              "version": 1
+            },
+            "inputParameters": {
+              "sourceAccountId": "${workflow.input.sourceAccountId}",
+              "destinationAccountId": "${workflow.input.destinationAccountId}",
+              "amount": "${workflow.input.amount}",
+              "currency": "${workflow.input.currency}"
+            }
+          }
+        ],
+        "REJECTED": [
+          {
+            "name": "reject_transfer",
+            "taskReferenceName": "reject_ref",
+            "inputParameters": {
+              "reason": "FRAUD_CHECK_FAILED",
+              "amlPassed": "${aml_check_ref.output.passed}",
+              "velocityPassed": "${velocity_check_ref.output.passed}",
+              "limitPassed": "${limit_check_ref.output.passed}"
+            },
+            "type": "SIMPLE"
+          },
+          {
+            "name": "notify_fraud_rejection",
+            "taskReferenceName": "fraud_notify_ref",
+            "inputParameters": {
+              "sourceAccountId": "${workflow.input.sourceAccountId}",
+              "reason": "FRAUD_CHECK_FAILED"
+            },
+            "type": "SIMPLE",
+            "optional": true
+          }
+        ]
+      },
+      "defaultCase": []
+    }
+  ],
+  "inputParameters": [
+    "sourceAccountId",
+    "destinationAccountId",
+    "amount",
+    "currency"
+  ],
+  "outputParameters": {
+    "fraudChecksPassed": "${fraud_evaluation_ref.output.decision}",
+    "transferResult": "${execute_transfer_ref.output}",
+    "amlResult": "${aml_check_ref.output}",
+    "velocityResult": "${velocity_check_ref.output}",
+    "limitResult": "${limit_check_ref.output}"
+  },
+  "schemaVersion": 2,
+  "restartable": true,
+  "ownerEmail": "admin@p2p-bank.com",
+  "timeoutSeconds": 300
+}
+

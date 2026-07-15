@@ -12,6 +12,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.nio.file.AccessDeniedException;
 
 /**
  * REST Controller for managing bank account operations.
@@ -220,7 +221,7 @@ public class BankAccountController {
      */
     @PostMapping
     public ResponseEntity<BankAccountResponse> createBankAccount(
-            @RequestBody @Validated BankAccountRequest bankAccountRequest) {
+            @RequestBody @Validated BankAccountRequest bankAccountRequest) throws AccessDeniedException {
 
         log.info("Received request to create a new bank account for holder: {}", bankAccountRequest.getAccountHolderName());
 
@@ -268,7 +269,7 @@ public class BankAccountController {
     @PutMapping("/{id}")
     public ResponseEntity<BankAccountResponse> updateBankAccount(
             @PathVariable Long id,
-            @RequestBody @Validated BankAccountRequest bankAccountRequest) {
+            @RequestBody @Validated BankAccountRequest bankAccountRequest) throws AccessDeniedException {
 
         log.info("Received request to update bank account with ID: {}", id);
 
@@ -338,7 +339,7 @@ public class BankAccountController {
 
     @PutMapping("/accounts/{accountNumber}/freeze")
     public ResponseEntity<String> freezeAccount(
-            @PathVariable String accountNumber) {
+            @PathVariable String accountNumber) throws AccessDeniedException {
 
         log.info("Received request to freeze account with account number: {}", accountNumber);
 

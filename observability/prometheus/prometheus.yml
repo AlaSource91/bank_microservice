@@ -1,0 +1,156 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Prometheus Configuration for P2P Microservices
+# ═══════════════════════════════════════════════════════════════════════
+# This configuration scrapes metrics from all microservices
+# Metrics are exposed via Spring Boot Actuator (/actuator/prometheus)
+# ───────────────────────────────────────────────────────────────────────
+
+global:
+  scrape_interval: 15s          # How often to scrape targets
+  evaluation_interval: 15s      # How often to evaluate rules
+  external_labels:
+    cluster: 'p2p-microservices'
+    environment: 'development'
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rule files (optional)
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ═════════════════════════════════════════════════════════════════════
+  # Prometheus Self-Monitoring
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          type: 'monitoring'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # API Gateway Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['host.docker.internal:8089']  # Windows/Mac Docker
+        labels:
+          service: 'api-gateway'
+          type: 'gateway'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Account Service Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'account-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['host.docker.internal:8083']
+        labels:
+          service: 'account-service'
+          type: 'business-service'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Auth Service Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'auth-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['host.docker.internal:8088']
+        labels:
+          service: 'auth-service'
+          type: 'auth-service'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Bank Simulator Service Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'bank-simulator-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['bank-simulator:8081']
+        labels:
+          service: 'bank-simulator'
+          type: 'business-service'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Bank Query Service Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'bank-query-service'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['host.docker.internal:5052']
+        labels:
+          service: 'bank-query'
+          type: 'query-service'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Eureka Server Metrics
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'eureka-server'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['host.docker.internal:8761']
+        labels:
+          service: 'eureka-server'
+          type: 'discovery'
+          environment: 'development'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Infrastructure: Redis Metrics (if Redis Exporter is used)
+  # ═════════════════════════════════════════════════════════════════════
+  #- job_name: 'redis'
+  #  static_configs:
+  #    - targets: ['redis-exporter:9121']
+  #      labels:
+  #        service: 'redis'
+  #        type: 'cache'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Infrastructure: MySQL Metrics (if MySQL Exporter is used)
+  # ═══════════════════════════════════════════════════════════════════════
+  #- job_name: 'mysql'
+  #  static_configs:
+  #    - targets: ['mysql-exporter:9104']
+  #      labels:
+  #        service: 'mysql'
+  #        type: 'database'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Infrastructure: Kafka Metrics (if Kafka Exporter is used)
+  # ═════════════════════════════════════════════════════════════════════
+  #- job_name: 'kafka'
+  #  static_configs:
+  #    - targets: ['kafka-exporter:9308']
+  #      labels:
+  #        service: 'kafka'
+  #        type: 'message-broker'
+
+  # ═════════════════════════════════════════════════════════════════════
+  # Conductor Server Metrics - Workflow Orchestration
+  # ═════════════════════════════════════════════════════════════════════
+  - job_name: 'conductor-server'
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['conductor-server:8080']
+        labels:
+          service: 'conductor-server'
+          type: 'workflow-orchestration'
+          environment: 'development'
